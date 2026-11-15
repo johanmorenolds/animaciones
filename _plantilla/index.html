@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mi animación</title>
+<!--
+  PLANTILLA DE ANIMACIÓN EN "MODO VÍDEO"
+  Copia esta carpeta, renómbrala y edita SOLO las escenas (y estilos nuevos si hacen falta).
+  Lee CLAUDE.md / README.md en la raíz del repositorio para el concepto y las reglas.
+
+  - Un escenario fijo de 1280x720 (como un vídeo HD) que se escala al tamaño de la ventana.
+  - La historia se divide en ESCENAS (<section class="scene">). Solo se ve una a la vez.
+  - Cada escena dura "data-dur" milisegundos y entra con la transición "data-enter".
+  - Un reloj en JavaScript (la "línea de tiempo") decide qué escena toca en cada momento.
+  - Las animaciones dentro de cada escena son CSS @keyframes que se activan con la clase "on".
+-->
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111;
+    --paper: #fdf6e3;
+    --yellow: #ffd60a;
+    --red: #e63946;
+    --blue: #3a86ff;
+    --sky: #8ecae6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: #1a1a1a; color: #eee;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Comic Neue', 'Comic Sans MS', cursive;
+    padding: 16px;
+  }
+
+  /* =========================================================
+     EL REPRODUCTOR: pantalla 16:9 + escenario escalado dentro
+     ========================================================= */
+  .player { width: min(100%, calc((100vh - 110px) * 16 / 9)); min-width: 280px; }
+  .viewport {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background: #000; overflow: hidden;
+    border: 4px solid #000; box-shadow: 0 10px 40px rgba(0,0,0,.6);
+  }
+  .viewport:fullscreen { border: 0; }
+  .stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1280px; height: 720px;
+    transform: translate(-50%, -50%) scale(var(--s, .5));
+    overflow: hidden; background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* Pausa: congela TODAS las animaciones CSS del escenario */
+  .stage.paused, .stage.paused *, .stage.paused *::before, .stage.paused *::after {
+    animation-play-state: paused !important;
+  }
+
+  /* =========================================================
+     ESCENAS y TRANSICIONES entre escenas
+     ========================================================= */
+  .scene { position: absolute; inset: 0; visibility: hidden; overflow: hidden; isolation: isolate; z-index: 0; }
+  .scene.on { visibility: visible; }
+
+  /* Iris: un círculo que se abre desde el centro */
+  .scene.on[data-enter="iris"]  { animation: t-iris .9s ease-in-out both; }
+  @keyframes t-iris { from { clip-path: circle(0% at 50% 55%); } to { clip-path: circle(80% at 50% 55%); } }
+
+  /* Destello: la escena entra con zoom y un flash blanco encima */
+  .scene.on[data-enter="flash"] { animation: t-zoom .5s ease-out both; }
+  .scene.on[data-enter="flash"]::after {
+    content: ""; position: absolute; inset: 0; background: #fff; z-index: 50;
+    animation: t-flash .5s ease-out both; pointer-events: none;
+  }
+  @keyframes t-zoom  { from { transform: scale(1.35); } to { transform: none; } }
+  @keyframes t-flash { from { opacity: 1; } to { opacity: 0; } }
+
+  /* Barrido diagonal de izquierda a derecha */
+  .scene.on[data-enter="wipe"] { animation: t-wipe .7s cubic-bezier(.7,0,.3,1) both; }
+  @keyframes t-wipe {
+    from { clip-path: polygon(0 0, 0 0, -30% 100%, -30% 100%); }
+    to   { clip-path: polygon(0 0, 130% 0, 100% 100%, -30% 100%); }
+  }
+
+  /* Paso de página: entra desde la derecha girando un poco */
+  .scene.on[data-enter="page"] {
+    animation: t-page .8s cubic-bezier(.2,.9,.3,1.1) both;
+    box-shadow: -30px 0 60px rgba(0,0,0,.5);
+  }
+  @keyframes t-page { from { transform: translateX(105%) rotate(8deg); } to { transform: none; } }
+
+  /* =========================================================
+     ESTILO CÓMIC (fondos, tinta, trama)
+     ========================================================= */
+  .halftone::before {
+    content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(0,0,0,.18) 2.4px, transparent 2.6px);
+    background-size: 14px 14px;
+  }
+  .bg-yellow { background-color: var(--yellow); }
+  .bg-sky    { background-color: var(--sky); }
+  .bg-paper  { background-color: var(--paper); }
+  .bg-red    { background-color: var(--red); }
+  .frame { position: absolute; inset: 0; border: 10px solid var(--ink); z-index: 40; pointer-events: none; }
+
+  .speedlines {
+    position: absolute; inset: -60%; z-index: 0;
+    background: repeating-conic-gradient(from 0deg at 50% 50%,
+      rgba(255,255,255,.85) 0deg 4deg, transparent 4deg 14deg);
+    animation: spin 8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Ciudad de fondo */
+  .city {
+    position: absolute; left: 0; right: 0; bottom: 40px; height: 300px; z-index: 0;
+    display: flex; align-items: flex-end; gap: 14px; padding: 0 30px;
+  }
+  .city i {
+    flex: 1; border: 5px solid var(--ink); border-bottom: 0;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,214,10,.85) 18px 32px, transparent 32px 50px),
+      #1d3557;
+    background-size: 100% 100%;
+    -webkit-mask: repeating-linear-gradient(180deg, #000 0 30px, rgba(0,0,0,.92) 30px 48px);
+  }
+  .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 44px; background: #495057; border-top: 6px solid var(--ink); z-index: 1; }
+
+  .cloud {
+    position: absolute; z-index: 0; width: 180px; height: 60px; background: #fff;
+    border: 5px solid var(--ink); border-radius: 40px;
+  }
+  .scene.on .cloud { animation: drift 12s linear both; }
+  @keyframes drift { to { translate: 260px 0; } }
+
+  /* =========================================================
+     PERSONAJES
+     ========================================================= */
+  .char { position: absolute; bottom: 30px; width: 220px; height: 367px; z-index: 5; overflow: visible; }
+
+  .scene.on .walk { animation: walkIn 1.6s ease-out both, bob .35s ease-in-out 4 alternate; }
+  @keyframes walkIn { from { transform: translateX(-620px); } to { transform: none; } }
+  @keyframes bob { to { translate: 0 -12px; } }
+
+  .scene.on .drop { animation: drop .7s cubic-bezier(.3,1.7,.5,1) .3s both; }
+  @keyframes drop { from { transform: translateY(-900px); } to { transform: none; } }
+
+  .scene.on .shake { animation: shake .1s linear .85s 8; }
+  @keyframes shake {
+    25% { transform: translate(-10px, 5px) rotate(-.6deg); }
+    75% { transform: translate(10px, -5px) rotate(.6deg); }
+  }
+
+  .scene.on .punch { animation: punch .55s cubic-bezier(.5,-0.6,.4,1.6) .5s both; }
+  @keyframes punch { 0% { transform: none; } 50% { transform: translateX(-50px); } 100% { transform: translateX(230px); } }
+
+  .scene.on .flyaway { animation: fly 1.1s ease-in 1s both; }
+  @keyframes fly { to { transform: translate(800px,-520px) rotate(720deg) scale(.2); opacity: 0; } }
+
+  .scene.on .peek { animation: peek .8s cubic-bezier(.3,1.6,.5,1) 2.2s both; }
+  @keyframes peek { from { transform: translateY(420px) rotate(-12deg); } to { transform: translateY(170px) rotate(-12deg); } }
+
+  /* Signo de sorpresa "!" */
+  .surprise {
+    position: absolute; z-index: 6; font-family: 'Bangers', Impact, sans-serif; font-size: 110px;
+    color: var(--red); -webkit-text-stroke: 4px var(--ink); transform: scale(0);
+  }
+  .scene.on .surprise { animation: boom .4s cubic-bezier(.2,2,.4,1) .9s forwards; }
+
+  /* =========================================================
+     TEXTOS: globos, narrador, onomatopeyas
+     ========================================================= */
+  .bubble {
+    position: absolute; z-index: 20;
+    background: #fff; border: 6px solid var(--ink); border-radius: 50% / 45%;
+    padding: 26px 40px; font-size: 38px; text-align: center;
+    transform: scale(0); transform-origin: bottom left;
+  }
+  .bubble::after {
+    content: ""; position: absolute; bottom: -34px; left: 50px;
+    border: 18px solid transparent; border-top: 28px solid var(--ink);
+  }
+  .bubble.right { transform-origin: bottom right; }
+  .bubble.right::after { left: auto; right: 50px; }
+  .scene.on .bubble { animation: pop .35s cubic-bezier(.3,1.8,.5,1) forwards; animation-delay: var(--d, 1s); }
+  @keyframes pop { to { transform: scale(1); } }
+
+  .type { display: inline-block; white-space: nowrap; overflow: hidden; width: 0; vertical-align: bottom; }
+  .scene.on .type { animation: typing var(--t, 1s) steps(var(--n, 20)) forwards; animation-delay: calc(var(--d, 1s) + .35s); }
+  @keyframes typing { to { width: calc(var(--n) * 1ch); } }
+
+  .caption {
+    position: absolute; top: 30px; left: 30px; z-index: 20;
+    background: var(--yellow); border: 5px solid var(--ink);
+    padding: 10px 22px; font-size: 30px; text-transform: uppercase;
+    box-shadow: 7px 7px 0 var(--ink);
+    transform: translateY(-160px); opacity: 0;
+  }
+  .scene.on .caption { animation: slideDown .5s cubic-bezier(.3,1.6,.5,1) forwards; animation-delay: var(--d, .4s); }
+  @keyframes slideDown { to { transform: none; opacity: 1; } }
+
+  .sfx {
+    position: absolute; z-index: 30;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 6px; line-height: 1;
+    color: var(--yellow);
+    -webkit-text-stroke: 5px var(--ink);
+    text-shadow: 10px 10px 0 var(--red), 15px 15px 0 var(--ink);
+    transform: scale(0) rotate(-30deg);
+  }
+  .scene.on .sfx { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+  @keyframes boom { to { transform: scale(1) rotate(var(--r, -10deg)); } }
+
+  .burst {
+    position: absolute; z-index: 25; width: 420px; height: 420px;
+    background: #fff; border: 6px solid var(--ink);
+    clip-path: polygon(50% 0,61% 30%,95% 18%,72% 45%,100% 62%,66% 66%,75% 100%,50% 75%,22% 98%,32% 66%,0 70%,26% 48%,4% 20%,38% 32%);
+    transform: scale(0);
+  }
+  .scene.on .burst { animation: boom .5s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+
+  /* Escena de título */
+  .title-line {
+    position: absolute; left: 0; right: 0; text-align: center; z-index: 30;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 8px; line-height: 1;
+    color: #fff; -webkit-text-stroke: 6px var(--ink);
+    text-shadow: 10px 10px 0 var(--red), 16px 16px 0 var(--ink);
+    transform: scale(0);
+  }
+  .scene.on .title-line { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .3s); }
+
+  /* =========================================================
+     CONTROLES DEL REPRODUCTOR
+     ========================================================= */
+  .overlay {
+    position: absolute; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h2 {
+    margin: 0; font-family: 'Bangers', Impact, sans-serif; letter-spacing: 3px; font-weight: normal;
+    font-size: clamp(28px, 6vw, 64px); color: var(--yellow); -webkit-text-stroke: 2px #000;
+    text-shadow: 4px 4px 0 var(--red);
+  }
+  .big {
+    font-family: 'Bangers', Impact, sans-serif; font-size: clamp(20px, 3.5vw, 34px); letter-spacing: 2px;
+    background: var(--red); color: #fff; border: 4px solid #000; padding: 8px 28px;
+    box-shadow: 5px 5px 0 #000; cursor: pointer;
+  }
+  .big:active { transform: translate(3px,3px); box-shadow: 2px 2px 0 #000; }
+
+  .controls {
+    display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap;
+  }
+  .controls button, .controls a {
+    font: inherit; font-size: 18px; line-height: 1;
+    background: #333; color: #fff; border: 2px solid #555; border-radius: 6px;
+    padding: 8px 12px; cursor: pointer; text-decoration: none;
+  }
+  .controls button:hover, .controls a:hover { background: #444; }
+  .progress { flex: 1; min-width: 160px; display: flex; gap: 4px; height: 14px; cursor: pointer; }
+  .seg { position: relative; background: #444; border-radius: 3px; overflow: hidden; }
+  .seg > b { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--yellow); }
+  .seg:hover { background: #555; }
+  .time { font-variant-numeric: tabular-nums; font-size: 15px; color: #bbb; min-width: 90px; text-align: right; }
+</style>
+</head>
+<body>
+
+<!-- Personajes en SVG: se dibujan una vez y se reutilizan con <use> -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="hero" viewBox="0 0 120 200">
+      <path d="M30 80 Q10 170 20 195 L100 195 Q110 170 90 80 Z" fill="#e63946" stroke="#111" stroke-width="5"/>
+      <rect x="35" y="78" width="50" height="80" rx="12" fill="#3a86ff" stroke="#111" stroke-width="5"/>
+      <path d="M48 100 L60 118 L72 100 Z" fill="#ffd60a" stroke="#111" stroke-width="4"/>
+      <rect x="38" y="152" width="18" height="44" fill="#1d3557" stroke="#111" stroke-width="5"/>
+      <rect x="64" y="152" width="18" height="44" fill="#1d3557" stroke="#111" stroke-width="5"/>
+      <circle cx="60" cy="45" r="32" fill="#f4c095" stroke="#111" stroke-width="5"/>
+      <path d="M30 40 Q60 0 92 40 Q75 22 60 26 Q45 22 30 40Z" fill="#111"/>
+      <rect x="34" y="38" width="52" height="14" rx="7" fill="#111"/>
+      <circle cx="49" cy="45" r="4" fill="#fff"/><circle cx="71" cy="45" r="4" fill="#fff"/>
+      <path d="M48 62 Q60 72 72 62" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="robot" viewBox="0 0 120 200">
+      <line x1="60" y1="8" x2="60" y2="28" stroke="#111" stroke-width="5"/>
+      <circle cx="60" cy="8" r="7" fill="#e63946" stroke="#111" stroke-width="4"/>
+      <rect x="25" y="28" width="70" height="55" rx="8" fill="#adb5bd" stroke="#111" stroke-width="5"/>
+      <circle cx="45" cy="52" r="9" fill="#ffd60a" stroke="#111" stroke-width="4"/>
+      <circle cx="75" cy="52" r="9" fill="#ffd60a" stroke="#111" stroke-width="4"/>
+      <rect x="42" y="68" width="36" height="8" fill="#111"/>
+      <rect x="20" y="88" width="80" height="70" rx="6" fill="#6c757d" stroke="#111" stroke-width="5"/>
+      <circle cx="60" cy="122" r="12" fill="#e63946" stroke="#111" stroke-width="4"/>
+      <rect x="30" y="156" width="22" height="40" fill="#495057" stroke="#111" stroke-width="5"/>
+      <rect x="68" y="156" width="22" height="40" fill="#495057" stroke="#111" stroke-width="5"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="player">
+  <div class="viewport" id="viewport">
+    <div class="stage" id="stage">
+
+      <!-- =====================================================
+           ESCENAS: copia un <section> para crear otra.
+           data-dur   = duración en milisegundos
+           data-enter = transición de entrada: none | iris | flash | wipe | page
+           data-name  = nombre que aparece en la barra de progreso
+           Coordenadas siempre en el lienzo de 1280x720.
+           ===================================================== -->
+
+      <!-- ESCENA 1 · Título -->
+      <section class="scene bg-yellow halftone" data-dur="3000" data-enter="none" data-name="Título">
+        <div class="speedlines"></div>
+        <div class="title-line" style="top:230px;font-size:170px;--d:.3s">¡MI TÍTULO!</div>
+        <div class="caption" style="top:auto;bottom:40px;left:auto;right:40px;--d:1.2s">Episodio 1</div>
+        <div class="frame"></div>
+      </section>
+
+      <!-- ESCENA 2 · Ejemplo con personaje, globo y onomatopeya -->
+      <section class="scene bg-sky halftone" data-dur="4500" data-enter="iris" data-name="Escena 2">
+        <div class="city"><i style="height:60%"></i><i style="height:90%"></i><i style="height:45%"></i><i style="height:75%"></i><i style="height:100%"></i></div>
+        <div class="ground"></div>
+        <div class="caption" style="--d:.6s">Texto del narrador</div>
+        <svg class="char walk" style="left:300px"><use href="#hero"/></svg>
+        <div class="bubble" style="left:470px;top:150px;--d:1.8s">
+          <span class="type" style="--n:12;--t:.7s">¡Hola mundo!</span>
+        </div>
+        <div class="sfx" style="font-size:150px;left:820px;top:60px;--d:2.8s">¡ZAS!</div>
+        <div class="frame"></div>
+      </section>
+
+    </div>
+
+    <!-- Pantallas superpuestas: inicio y final -->
+    <div class="overlay" id="startOverlay">
+      <h2>Mi animación</h2>
+      <button class="big" id="startBtn">▶ Reproducir</button>
+    </div>
+    <div class="overlay" id="endOverlay" hidden>
+      <h2>¡Fin!</h2>
+      <button class="big" id="againBtn">↺ ¡Otra vez!</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <a href="../" title="Volver a la galería">⬅</a>
+    <button id="playBtn" title="Reproducir / pausar (barra espaciadora)">▶</button>
+    <button id="restartBtn" title="Reiniciar">↺</button>
+    <div class="progress" id="progress"></div>
+    <span class="time" id="time">0.0 / 0.0 s</span>
+    <button id="fsBtn" title="Pantalla completa">⛶</button>
+  </div>
+</div>
+
+<script>
+  // ==========================================================
+  //  1) ESCALADO: el escenario mide 1280x720 y se ajusta a la ventana
+  // ==========================================================
+  const viewport = document.getElementById('viewport');
+  const stage = document.getElementById('stage');
+  new ResizeObserver(() => {
+    const s = Math.min(viewport.clientWidth / 1280, viewport.clientHeight / 720);
+    stage.style.setProperty('--s', s);
+  }).observe(viewport);
+
+  // ==========================================================
+  //  2) LÍNEA DE TIEMPO: calcula cuándo empieza cada escena
+  // ==========================================================
+  const scenes = [...stage.querySelectorAll('.scene')];
+  const starts = [];
+  let total = 0;
+  for (const s of scenes) { starts.push(total); total += Number(s.dataset.dur); }
+
+  // Barra de progreso: un segmento por escena (ancho proporcional a su duración)
+  const progress = document.getElementById('progress');
+  const fills = scenes.map((s, i) => {
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.style.flex = s.dataset.dur;
+    seg.title = `Escena ${i + 1}: ${s.dataset.name}`;
+    seg.innerHTML = '<b></b>';
+    seg.addEventListener('click', () => jumpTo(i));
+    progress.appendChild(seg);
+    return seg.firstChild;
+  });
+
+  let t = 0;            // tiempo actual (ms)
+  let current = -1;     // escena visible
+  let playing = false;
+  let last = 0;
+
+  // Muestra la escena i con su transición de entrada.
+  function showScene(i) {
+    const prev = scenes[current];
+    const next = scenes[i];
+    current = i;
+    next.classList.add('on');
+    if (!prev) return;
+    if (next.dataset.enter === 'none') { prev.classList.remove('on'); return; }
+    // Cuando termina la transición de entrada, se oculta la escena anterior
+    const done = e => {
+      if (e.target !== next) return;
+      next.removeEventListener('animationend', done);
+      prev.classList.remove('on');
+    };
+    next.addEventListener('animationend', done);
+  }
+
+  function update() {
+    let i = starts.findIndex((st, k) => t < st + Number(scenes[k].dataset.dur));
+    if (i === -1) i = scenes.length - 1;
+    if (i !== current) showScene(i);
+    fills.forEach((f, k) => {
+      const d = Number(scenes[k].dataset.dur);
+      f.style.width = Math.max(0, Math.min(1, (t - starts[k]) / d)) * 100 + '%';
+    });
+    document.getElementById('time').textContent =
+      `${(t / 1000).toFixed(1)} / ${(total / 1000).toFixed(1)} s`;
+  }
+
+  function tick(now) {
+    if (!playing) return;
+    t += Math.min(now - last, 100);   // evita saltos si la pestaña estuvo oculta
+    last = now;
+    if (t >= total) { t = total; update(); finish(); return; }
+    update();
+    requestAnimationFrame(tick);
+  }
+
+  function play() {
+    if (t >= total) return restart();
+    playing = true;
+    stage.classList.remove('paused');
+    document.getElementById('playBtn').textContent = '❚❚';
+    startOverlay.hidden = true; endOverlay.hidden = true;
+    last = performance.now();
+    requestAnimationFrame(tick);
+  }
+  function pause() {
+    playing = false;
+    stage.classList.add('paused');
+    document.getElementById('playBtn').textContent = '▶';
+  }
+  function finish() { pause(); endOverlay.hidden = false; }
+
+  // Reinicia todas las animaciones y salta al inicio de la escena i
+  function jumpTo(i) {
+    scenes.forEach(s => s.classList.remove('on'));
+    void stage.offsetWidth;          // fuerza al navegador a "olvidar" las animaciones
+    current = -1;
+    t = starts[i];
+    update();
+    play();
+  }
+  function restart() { jumpTo(0); }
+
+  // ==========================================================
+  //  3) CONTROLES
+  // ==========================================================
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay = document.getElementById('endOverlay');
+  document.getElementById('startBtn').onclick = restart;
+  document.getElementById('againBtn').onclick = restart;
+  document.getElementById('restartBtn').onclick = restart;
+  document.getElementById('playBtn').onclick = () => {
+    if (current === -1) return restart();
+    playing ? pause() : play();
+  };
+  document.getElementById('fsBtn').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else viewport.requestFullscreen?.();
+  };
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); document.getElementById('playBtn').click(); }
+  });
+
+  // Muestra el primer cuadro detrás de la pantalla de inicio
+  stage.classList.add('paused');
+  update();
+</script>
+</body>
+</html>
