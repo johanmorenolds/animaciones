@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Mini cómic animado</title>
+<title>Héroe vs. Robot</title>
 <!--
-  Demo de animación estilo cómic SIN dependencias:
-  - HTML  : estructura (viñetas, personajes SVG, globos de diálogo)
-  - CSS   : estilo cómic (tinta gruesa, trama de puntos "halftone", fuentes)
-            y animaciones con @keyframes
-  - JS    : una "línea de tiempo" que va activando escenas en orden
-  Abre este archivo directamente en el navegador.
+  ANIMACIÓN EN "MODO VÍDEO"
+  - Un escenario fijo de 1280x720 (como un vídeo HD) que se escala al tamaño de la ventana.
+  - La historia se divide en ESCENAS (<section class="scene">). Solo se ve una a la vez.
+  - Cada escena dura "data-dur" milisegundos y entra con la transición "data-enter".
+  - Un reloj en JavaScript (la "línea de tiempo") decide qué escena toca en cada momento.
+  - Las animaciones dentro de cada escena son CSS @keyframes que se activan con la clase "on".
 -->
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
 <style>
@@ -20,172 +20,262 @@
     --yellow: #ffd60a;
     --red: #e63946;
     --blue: #3a86ff;
-    --skin: #f4c095;
+    --sky: #8ecae6;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh;
-    background: #222;
+    background: #1a1a1a; color: #eee;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     font-family: 'Comic Neue', 'Comic Sans MS', cursive;
     padding: 16px;
   }
 
-  /* ---------- Página y viñetas ---------- */
-  .page {
-    width: min(900px, 100%);
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 300px 300px;
-    gap: 14px;
-    background: var(--paper);
-    padding: 14px;
-    border: 4px solid var(--ink);
+  /* =========================================================
+     EL REPRODUCTOR: pantalla 16:9 + escenario escalado dentro
+     ========================================================= */
+  .player { width: min(100%, calc((100vh - 110px) * 16 / 9)); min-width: 280px; }
+  .viewport {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background: #000; overflow: hidden;
+    border: 4px solid #000; box-shadow: 0 10px 40px rgba(0,0,0,.6);
   }
-  .panel {
-    position: relative; overflow: hidden;
-    border: 5px solid var(--ink);
-    background: var(--paper);
-    opacity: 0; transform: scale(.85) rotate(-2deg);
-    transition: opacity .4s, transform .5s cubic-bezier(.2,1.6,.4,1);
+  .viewport:fullscreen { border: 0; }
+  .stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1280px; height: 720px;
+    transform: translate(-50%, -50%) scale(var(--s, .5));
+    overflow: hidden; background: var(--paper);
+    color: var(--ink);
   }
-  .panel.on { opacity: 1; transform: none; }
-  .panel.wide { grid-column: span 2; }
 
-  /* Trama de puntos (halftone) típica de cómic impreso */
+  /* Pausa: congela TODAS las animaciones CSS del escenario */
+  .stage.paused, .stage.paused *, .stage.paused *::before, .stage.paused *::after {
+    animation-play-state: paused !important;
+  }
+
+  /* =========================================================
+     ESCENAS y TRANSICIONES entre escenas
+     ========================================================= */
+  .scene { position: absolute; inset: 0; visibility: hidden; overflow: hidden; isolation: isolate; z-index: 0; }
+  .scene.on { visibility: visible; }
+
+  /* Iris: un círculo que se abre desde el centro */
+  .scene.on[data-enter="iris"]  { animation: t-iris .9s ease-in-out both; }
+  @keyframes t-iris { from { clip-path: circle(0% at 50% 55%); } to { clip-path: circle(80% at 50% 55%); } }
+
+  /* Destello: la escena entra con zoom y un flash blanco encima */
+  .scene.on[data-enter="flash"] { animation: t-zoom .5s ease-out both; }
+  .scene.on[data-enter="flash"]::after {
+    content: ""; position: absolute; inset: 0; background: #fff; z-index: 50;
+    animation: t-flash .5s ease-out both; pointer-events: none;
+  }
+  @keyframes t-zoom  { from { transform: scale(1.35); } to { transform: none; } }
+  @keyframes t-flash { from { opacity: 1; } to { opacity: 0; } }
+
+  /* Barrido diagonal de izquierda a derecha */
+  .scene.on[data-enter="wipe"] { animation: t-wipe .7s cubic-bezier(.7,0,.3,1) both; }
+  @keyframes t-wipe {
+    from { clip-path: polygon(0 0, 0 0, -30% 100%, -30% 100%); }
+    to   { clip-path: polygon(0 0, 130% 0, 100% 100%, -30% 100%); }
+  }
+
+  /* Paso de página: entra desde la derecha girando un poco */
+  .scene.on[data-enter="page"] {
+    animation: t-page .8s cubic-bezier(.2,.9,.3,1.1) both;
+    box-shadow: -30px 0 60px rgba(0,0,0,.5);
+  }
+  @keyframes t-page { from { transform: translateX(105%) rotate(8deg); } to { transform: none; } }
+
+  /* =========================================================
+     ESTILO CÓMIC (fondos, tinta, trama)
+     ========================================================= */
   .halftone::before {
-    content: ""; position: absolute; inset: 0;
-    background-image: radial-gradient(rgba(0,0,0,.18) 1.6px, transparent 1.7px);
-    background-size: 9px 9px;
-    pointer-events: none; z-index: 0;
+    content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(0,0,0,.18) 2.4px, transparent 2.6px);
+    background-size: 14px 14px;
   }
   .bg-yellow { background-color: var(--yellow); }
-  .bg-blue   { background-color: #8ecae6; }
+  .bg-sky    { background-color: var(--sky); }
+  .bg-paper  { background-color: var(--paper); }
+  .bg-red    { background-color: var(--red); }
+  .frame { position: absolute; inset: 0; border: 10px solid var(--ink); z-index: 40; pointer-events: none; }
 
-  /* Líneas de acción radiales */
   .speedlines {
-    position: absolute; inset: -50%;
+    position: absolute; inset: -60%; z-index: 0;
     background: repeating-conic-gradient(from 0deg at 50% 50%,
-      rgba(255,255,255,.9) 0deg 4deg, transparent 4deg 14deg);
-    animation: spin 6s linear infinite;
-    z-index: 0;
+      rgba(255,255,255,.85) 0deg 4deg, transparent 4deg 14deg);
+    animation: spin 8s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ---------- Personajes ---------- */
-  .char { position: absolute; bottom: 0; z-index: 1; }
-  .hero  { left: 8%;  width: 150px; }
-  .robot { right: 8%; width: 150px; }
+  /* Ciudad de fondo */
+  .city {
+    position: absolute; left: 0; right: 0; bottom: 40px; height: 300px; z-index: 0;
+    display: flex; align-items: flex-end; gap: 14px; padding: 0 30px;
+  }
+  .city i {
+    flex: 1; border: 5px solid var(--ink); border-bottom: 0;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,214,10,.85) 18px 32px, transparent 32px 50px),
+      #1d3557;
+    background-size: 100% 100%;
+    -webkit-mask: repeating-linear-gradient(180deg, #000 0 30px, rgba(0,0,0,.92) 30px 48px);
+  }
+  .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 44px; background: #495057; border-top: 6px solid var(--ink); z-index: 1; }
 
-  .panel.on .hero.walk { animation: walkIn 1.4s ease-out both, bob .35s ease-in-out 4 alternate; }
-  @keyframes walkIn { from { transform: translateX(-260px); } to { transform: none; } }
-  @keyframes bob { to { translate: 0 -8px; } }
+  .cloud {
+    position: absolute; z-index: 0; width: 180px; height: 60px; background: #fff;
+    border: 5px solid var(--ink); border-radius: 40px;
+  }
+  .scene.on .cloud { animation: drift 12s linear both; }
+  @keyframes drift { to { translate: 260px 0; } }
 
-  .panel.on .robot.drop { animation: drop .7s cubic-bezier(.3,1.7,.5,1) .3s both; }
-  @keyframes drop { from { transform: translateY(-340px); } to { transform: none; } }
+  /* =========================================================
+     PERSONAJES
+     ========================================================= */
+  .char { position: absolute; bottom: 30px; width: 220px; height: 367px; z-index: 5; overflow: visible; }
 
-  .panel.on .shake { animation: shake .12s linear 8; }
+  .scene.on .walk { animation: walkIn 1.6s ease-out both, bob .35s ease-in-out 4 alternate; }
+  @keyframes walkIn { from { transform: translateX(-620px); } to { transform: none; } }
+  @keyframes bob { to { translate: 0 -12px; } }
+
+  .scene.on .drop { animation: drop .7s cubic-bezier(.3,1.7,.5,1) .3s both; }
+  @keyframes drop { from { transform: translateY(-900px); } to { transform: none; } }
+
+  .scene.on .shake { animation: shake .1s linear .85s 8; }
   @keyframes shake {
-    25% { transform: translate(-6px, 3px) rotate(-1deg); }
-    75% { transform: translate(6px, -3px) rotate(1deg); }
+    25% { transform: translate(-10px, 5px) rotate(-.6deg); }
+    75% { transform: translate(10px, -5px) rotate(.6deg); }
   }
 
-  .panel.on .punch { animation: punch .5s cubic-bezier(.5,-0.6,.4,1.6) .6s both; }
-  @keyframes punch { 0%{transform:none} 50%{transform:translateX(-30px)} 100%{transform:translateX(150px)} }
+  .scene.on .punch { animation: punch .55s cubic-bezier(.5,-0.6,.4,1.6) .5s both; }
+  @keyframes punch { 0% { transform: none; } 50% { transform: translateX(-50px); } 100% { transform: translateX(230px); } }
 
-  .panel.on .flyaway { animation: fly 1s ease-in 1s both; }
-  @keyframes fly { to { transform: translate(400px,-260px) rotate(540deg) scale(.3); opacity: 0; } }
+  .scene.on .flyaway { animation: fly 1.1s ease-in 1s both; }
+  @keyframes fly { to { transform: translate(800px,-520px) rotate(720deg) scale(.2); opacity: 0; } }
 
-  /* ---------- Globos de diálogo ---------- */
+  .scene.on .peek { animation: peek .8s cubic-bezier(.3,1.6,.5,1) 2.2s both; }
+  @keyframes peek { from { transform: translateY(420px) rotate(-12deg); } to { transform: translateY(170px) rotate(-12deg); } }
+
+  /* Signo de sorpresa "!" */
+  .surprise {
+    position: absolute; z-index: 6; font-family: 'Bangers', Impact, sans-serif; font-size: 110px;
+    color: var(--red); -webkit-text-stroke: 4px var(--ink); transform: scale(0);
+  }
+  .scene.on .surprise { animation: boom .4s cubic-bezier(.2,2,.4,1) .9s forwards; }
+
+  /* =========================================================
+     TEXTOS: globos, narrador, onomatopeyas
+     ========================================================= */
   .bubble {
-    position: absolute; z-index: 3;
-    background: #fff; border: 4px solid var(--ink); border-radius: 50% / 45%;
-    padding: 14px 20px; font-size: 18px; max-width: 220px; text-align: center;
+    position: absolute; z-index: 20;
+    background: #fff; border: 6px solid var(--ink); border-radius: 50% / 45%;
+    padding: 26px 40px; font-size: 38px; text-align: center;
     transform: scale(0); transform-origin: bottom left;
   }
-  .bubble::after { /* colita del globo */
-    content: ""; position: absolute; bottom: -22px; left: 28px;
-    border: 12px solid transparent; border-top: 18px solid var(--ink);
+  .bubble::after {
+    content: ""; position: absolute; bottom: -34px; left: 50px;
+    border: 18px solid transparent; border-top: 28px solid var(--ink);
   }
   .bubble.right { transform-origin: bottom right; }
-  .bubble.right::after { left: auto; right: 28px; }
-  .panel.on .bubble { animation: pop .35s cubic-bezier(.3,1.8,.5,1) forwards; animation-delay: var(--d, 1s); }
+  .bubble.right::after { left: auto; right: 50px; }
+  .scene.on .bubble { animation: pop .35s cubic-bezier(.3,1.8,.5,1) forwards; animation-delay: var(--d, 1s); }
   @keyframes pop { to { transform: scale(1); } }
 
-  /* Texto escrito letra a letra (máquina de escribir) */
   .type { display: inline-block; white-space: nowrap; overflow: hidden; width: 0; vertical-align: bottom; }
-  .panel.on .type { animation: typing var(--t, 1s) steps(var(--n, 20)) forwards; animation-delay: calc(var(--d, 1s) + .35s); }
+  .scene.on .type { animation: typing var(--t, 1s) steps(var(--n, 20)) forwards; animation-delay: calc(var(--d, 1s) + .35s); }
   @keyframes typing { to { width: calc(var(--n) * 1ch); } }
 
-  /* Caja de narrador */
   .caption {
-    position: absolute; top: 10px; left: 10px; z-index: 3;
-    background: var(--yellow); border: 3px solid var(--ink);
-    padding: 6px 12px; font-size: 15px; text-transform: uppercase;
-    box-shadow: 4px 4px 0 var(--ink);
+    position: absolute; top: 30px; left: 30px; z-index: 20;
+    background: var(--yellow); border: 5px solid var(--ink);
+    padding: 10px 22px; font-size: 30px; text-transform: uppercase;
+    box-shadow: 7px 7px 0 var(--ink);
+    transform: translateY(-160px); opacity: 0;
   }
+  .scene.on .caption { animation: slideDown .5s cubic-bezier(.3,1.6,.5,1) forwards; animation-delay: var(--d, .4s); }
+  @keyframes slideDown { to { transform: none; opacity: 1; } }
 
-  /* ---------- Onomatopeyas ---------- */
   .sfx {
-    position: absolute; z-index: 4;
-    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 3px;
+    position: absolute; z-index: 30;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 6px; line-height: 1;
     color: var(--yellow);
-    -webkit-text-stroke: 3px var(--ink);
-    text-shadow: 6px 6px 0 var(--red), 9px 9px 0 var(--ink);
+    -webkit-text-stroke: 5px var(--ink);
+    text-shadow: 10px 10px 0 var(--red), 15px 15px 0 var(--ink);
     transform: scale(0) rotate(-30deg);
   }
-  .panel.on .sfx { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
-  @keyframes boom { to { transform: scale(1) rotate(var(--r, -12deg)); } }
+  .scene.on .sfx { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+  @keyframes boom { to { transform: scale(1) rotate(var(--r, -10deg)); } }
 
-  /* Estallido detrás de la onomatopeya */
   .burst {
-    position: absolute; z-index: 2; width: 260px; height: 260px;
-    background: #fff; border: 4px solid var(--ink);
+    position: absolute; z-index: 25; width: 420px; height: 420px;
+    background: #fff; border: 6px solid var(--ink);
     clip-path: polygon(50% 0,61% 30%,95% 18%,72% 45%,100% 62%,66% 66%,75% 100%,50% 75%,22% 98%,32% 66%,0 70%,26% 48%,4% 20%,38% 32%);
     transform: scale(0);
   }
-  .panel.on .burst { animation: boom .5s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+  .scene.on .burst { animation: boom .5s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
 
-  /* ---------- Controles ---------- */
-  .controls { margin-top: 14px; display: flex; gap: 14px; align-items: center; }
-  .back {
-    font-family: 'Bangers', Impact, sans-serif; font-size: 22px; letter-spacing: 2px;
-    background: var(--yellow); color: var(--ink); border: 4px solid var(--ink);
-    padding: 6px 18px; box-shadow: 4px 4px 0 #000; text-decoration: none;
+  /* Escena de título */
+  .title-line {
+    position: absolute; left: 0; right: 0; text-align: center; z-index: 30;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 8px; line-height: 1;
+    color: #fff; -webkit-text-stroke: 6px var(--ink);
+    text-shadow: 10px 10px 0 var(--red), 16px 16px 0 var(--ink);
+    transform: scale(0);
   }
-  button {
-    font-family: 'Bangers', Impact, sans-serif; font-size: 22px; letter-spacing: 2px;
-    background: var(--red); color: #fff; border: 4px solid var(--ink);
-    padding: 6px 22px; cursor: pointer; box-shadow: 4px 4px 0 #000;
-  }
-  button:active { transform: translate(3px,3px); box-shadow: 1px 1px 0 #000; }
+  .scene.on .title-line { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .3s); }
 
-  @media (max-width: 640px) {
-    .page { grid-template-columns: 1fr; grid-template-rows: repeat(4, 260px); }
-    .panel.wide { grid-column: span 1; }
-    .hero, .robot { width: 110px; }
-    .bubble { font-size: 15px; max-width: 170px; }
+  /* =========================================================
+     CONTROLES DEL REPRODUCTOR
+     ========================================================= */
+  .overlay {
+    position: absolute; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
   }
+  .overlay[hidden] { display: none; }
+  .overlay h2 {
+    margin: 0; font-family: 'Bangers', Impact, sans-serif; letter-spacing: 3px; font-weight: normal;
+    font-size: clamp(28px, 6vw, 64px); color: var(--yellow); -webkit-text-stroke: 2px #000;
+    text-shadow: 4px 4px 0 var(--red);
+  }
+  .big {
+    font-family: 'Bangers', Impact, sans-serif; font-size: clamp(20px, 3.5vw, 34px); letter-spacing: 2px;
+    background: var(--red); color: #fff; border: 4px solid #000; padding: 8px 28px;
+    box-shadow: 5px 5px 0 #000; cursor: pointer;
+  }
+  .big:active { transform: translate(3px,3px); box-shadow: 2px 2px 0 #000; }
+
+  .controls {
+    display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap;
+  }
+  .controls button, .controls a {
+    font: inherit; font-size: 18px; line-height: 1;
+    background: #333; color: #fff; border: 2px solid #555; border-radius: 6px;
+    padding: 8px 12px; cursor: pointer; text-decoration: none;
+  }
+  .controls button:hover, .controls a:hover { background: #444; }
+  .progress { flex: 1; min-width: 160px; display: flex; gap: 4px; height: 14px; cursor: pointer; }
+  .seg { position: relative; background: #444; border-radius: 3px; overflow: hidden; }
+  .seg > b { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--yellow); }
+  .seg:hover { background: #555; }
+  .time { font-variant-numeric: tabular-nums; font-size: 15px; color: #bbb; min-width: 90px; text-align: right; }
 </style>
 </head>
 <body>
 
-<!-- Personajes reutilizables definidos una sola vez en SVG -->
+<!-- Personajes en SVG: se dibujan una vez y se reutilizan con <use> -->
 <svg width="0" height="0" style="position:absolute">
   <defs>
     <symbol id="hero" viewBox="0 0 120 200">
-      <!-- capa -->
       <path d="M30 80 Q10 170 20 195 L100 195 Q110 170 90 80 Z" fill="#e63946" stroke="#111" stroke-width="5"/>
-      <!-- cuerpo -->
       <rect x="35" y="78" width="50" height="80" rx="12" fill="#3a86ff" stroke="#111" stroke-width="5"/>
       <path d="M48 100 L60 118 L72 100 Z" fill="#ffd60a" stroke="#111" stroke-width="4"/>
-      <!-- piernas -->
       <rect x="38" y="152" width="18" height="44" fill="#1d3557" stroke="#111" stroke-width="5"/>
       <rect x="64" y="152" width="18" height="44" fill="#1d3557" stroke="#111" stroke-width="5"/>
-      <!-- cabeza -->
       <circle cx="60" cy="45" r="32" fill="#f4c095" stroke="#111" stroke-width="5"/>
       <path d="M30 40 Q60 0 92 40 Q75 22 60 26 Q45 22 30 40Z" fill="#111"/>
-      <!-- antifaz y ojos -->
       <rect x="34" y="38" width="52" height="14" rx="7" fill="#111"/>
       <circle cx="49" cy="45" r="4" fill="#fff"/><circle cx="71" cy="45" r="4" fill="#fff"/>
       <path d="M48 62 Q60 72 72 62" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/>
@@ -205,64 +295,216 @@
   </defs>
 </svg>
 
-<main class="page">
-  <!-- Viñeta 1: el héroe llega -->
-  <section class="panel halftone bg-blue" data-dur="3200">
-    <div class="caption">Ciudad Tinta, 3:00 p.m.</div>
-    <svg class="char hero walk"><use href="#hero"/></svg>
-    <div class="bubble" style="top:60px;left:38%;--d:1.4s">
-      <span class="type" style="--n:18;--t:.9s">¡Qué día tan calmo!</span>
-    </div>
-  </section>
+<div class="player">
+  <div class="viewport" id="viewport">
+    <div class="stage" id="stage">
 
-  <!-- Viñeta 2: aparece el robot -->
-  <section class="panel halftone" data-dur="3200">
-    <div class="sfx" style="font-size:64px;top:20px;left:20px;--d:.9s;--r:-10deg">¡CRASH!</div>
-    <div class="shake" style="position:absolute;inset:0">
-      <svg class="char robot drop"><use href="#robot"/></svg>
-    </div>
-    <div class="bubble right" style="top:90px;left:10%;--d:1.8s">
-      <span class="type" style="--n:15;--t:.8s">BIP BOP. ¡RÍNDETE!</span>
-    </div>
-  </section>
+      <!-- ESCENA 1 · Título -->
+      <section class="scene bg-yellow halftone" data-dur="3200" data-enter="none" data-name="Título">
+        <div class="speedlines"></div>
+        <div class="title-line" style="top:110px;font-size:170px;--d:.2s">¡HÉROE!</div>
+        <div class="title-line" style="top:300px;font-size:90px;color:var(--yellow);--d:.75s">vs.</div>
+        <div class="title-line" style="top:410px;font-size:170px;--d:1.2s">¡ROBOT!</div>
+        <div class="caption" style="top:auto;bottom:40px;left:auto;right:40px;--d:1.8s">Episodio 1 · Un día tranquilo</div>
+        <div class="frame"></div>
+      </section>
 
-  <!-- Viñeta 3 (ancha): el golpe -->
-  <section class="panel wide halftone bg-yellow" data-dur="3600">
-    <div class="speedlines"></div>
-    <svg class="char hero punch" style="left:20%"><use href="#hero"/></svg>
-    <svg class="char robot flyaway" style="right:20%"><use href="#robot"/></svg>
-    <div class="burst" style="left:calc(50% - 130px);top:20px;--d:1s"></div>
-    <div class="sfx" style="font-size:96px;left:calc(50% - 100px);top:80px;--d:1.05s">¡POW!</div>
-    <div class="caption" style="left:auto;right:10px;top:auto;bottom:10px">Fin… ¿o no?</div>
-  </section>
-</main>
+      <!-- ESCENA 2 · La calma -->
+      <section class="scene bg-sky halftone" data-dur="4300" data-enter="iris" data-name="La calma">
+        <div class="cloud" style="top:110px;left:620px"></div>
+        <div class="cloud" style="top:60px;left:950px;transform:scale(.7)"></div>
+        <div class="city"><i style="height:60%"></i><i style="height:90%"></i><i style="height:45%"></i><i style="height:75%"></i><i style="height:100%"></i><i style="height:55%"></i><i style="height:80%"></i></div>
+        <div class="ground"></div>
+        <div class="caption" style="--d:.6s">Ciudad Tinta, 3:00 p.m.</div>
+        <svg class="char walk" style="left:300px"><use href="#hero"/></svg>
+        <div class="bubble" style="left:470px;top:150px;--d:1.8s">
+          <span class="type" style="--n:18;--t:.9s">¡Qué día tan calmo!</span>
+        </div>
+        <div class="frame"></div>
+      </section>
 
-<div class="controls">
-  <a class="back" href="../">⬅ Volver</a>
-  <button id="replay">¡Otra vez!</button>
+      <!-- ESCENA 3 · ¡CRASH! -->
+      <section class="scene bg-paper halftone" data-dur="4300" data-enter="flash" data-name="¡Crash!">
+        <div class="shake" style="position:absolute;inset:0">
+          <div class="city"><i style="height:70%"></i><i style="height:40%"></i><i style="height:95%"></i><i style="height:60%"></i><i style="height:85%"></i><i style="height:50%"></i></div>
+          <div class="ground"></div>
+          <svg class="char" style="left:170px"><use href="#hero"/></svg>
+          <div class="surprise" style="left:265px;top:190px">!</div>
+          <svg class="char drop" style="right:200px"><use href="#robot"/></svg>
+        </div>
+        <div class="sfx" style="font-size:160px;left:430px;top:40px;--d:.85s;--r:-8deg">¡CRASH!</div>
+        <div class="bubble right" style="right:360px;top:250px;--d:1.9s">
+          <span class="type" style="--n:18;--t:.9s">BIP BOP. ¡RÍNDETE!</span>
+        </div>
+        <div class="frame"></div>
+      </section>
+
+      <!-- ESCENA 4 · ¡POW! -->
+      <section class="scene bg-yellow halftone" data-dur="3800" data-enter="wipe" data-name="¡Pow!">
+        <div class="speedlines"></div>
+        <svg class="char punch" style="left:260px"><use href="#hero"/></svg>
+        <svg class="char flyaway" style="right:260px"><use href="#robot"/></svg>
+        <div class="burst" style="left:600px;top:10px;--d:.95s"></div>
+        <div class="sfx" style="font-size:190px;left:650px;top:100px;--d:1s">¡POW!</div>
+        <div class="frame"></div>
+      </section>
+
+      <!-- ESCENA 5 · Fin… ¿o no? -->
+      <section class="scene bg-red halftone" data-dur="4200" data-enter="page" data-name="Fin">
+        <div class="title-line" style="top:170px;font-size:230px;color:var(--yellow);--d:.5s">FIN</div>
+        <div class="caption" style="top:430px;left:50%;margin-left:-150px;font-size:40px;--d:1.4s">…¿o no?</div>
+        <svg class="char peek" style="right:80px;bottom:0"><use href="#robot"/></svg>
+        <div class="frame"></div>
+      </section>
+
+    </div>
+
+    <!-- Pantallas superpuestas: inicio y final -->
+    <div class="overlay" id="startOverlay">
+      <h2>Héroe vs. Robot</h2>
+      <button class="big" id="startBtn">▶ Reproducir</button>
+    </div>
+    <div class="overlay" id="endOverlay" hidden>
+      <h2>¡Fin!</h2>
+      <button class="big" id="againBtn">↺ ¡Otra vez!</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <a href="../" title="Volver a la galería">⬅</a>
+    <button id="playBtn" title="Reproducir / pausar (barra espaciadora)">▶</button>
+    <button id="restartBtn" title="Reiniciar">↺</button>
+    <div class="progress" id="progress"></div>
+    <span class="time" id="time">0.0 / 0.0 s</span>
+    <button id="fsBtn" title="Pantalla completa">⛶</button>
+  </div>
 </div>
 
 <script>
-  // Línea de tiempo muy simple: activa cada viñeta tras la duración de la anterior.
-  // Las animaciones internas las hace CSS; JS solo decide el orden y el ritmo.
-  const panels = [...document.querySelectorAll('.panel')];
-  let timers = [];
+  // ==========================================================
+  //  1) ESCALADO: el escenario mide 1280x720 y se ajusta a la ventana
+  // ==========================================================
+  const viewport = document.getElementById('viewport');
+  const stage = document.getElementById('stage');
+  new ResizeObserver(() => {
+    const s = Math.min(viewport.clientWidth / 1280, viewport.clientHeight / 720);
+    stage.style.setProperty('--s', s);
+  }).observe(viewport);
 
-  function play() {
-    timers.forEach(clearTimeout);
-    timers = [];
-    panels.forEach(p => p.classList.remove('on'));
-    void document.body.offsetWidth;            // fuerza reflow para reiniciar animaciones CSS
+  // ==========================================================
+  //  2) LÍNEA DE TIEMPO: calcula cuándo empieza cada escena
+  // ==========================================================
+  const scenes = [...stage.querySelectorAll('.scene')];
+  const starts = [];
+  let total = 0;
+  for (const s of scenes) { starts.push(total); total += Number(s.dataset.dur); }
 
-    let t = 300;
-    for (const p of panels) {
-      timers.push(setTimeout(() => p.classList.add('on'), t));
-      t += Number(p.dataset.dur);
-    }
+  // Barra de progreso: un segmento por escena (ancho proporcional a su duración)
+  const progress = document.getElementById('progress');
+  const fills = scenes.map((s, i) => {
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.style.flex = s.dataset.dur;
+    seg.title = `Escena ${i + 1}: ${s.dataset.name}`;
+    seg.innerHTML = '<b></b>';
+    seg.addEventListener('click', () => jumpTo(i));
+    progress.appendChild(seg);
+    return seg.firstChild;
+  });
+
+  let t = 0;            // tiempo actual (ms)
+  let current = -1;     // escena visible
+  let playing = false;
+  let last = 0;
+
+  // Muestra la escena i con su transición de entrada.
+  function showScene(i) {
+    const prev = scenes[current];
+    const next = scenes[i];
+    current = i;
+    next.classList.add('on');
+    if (!prev) return;
+    if (next.dataset.enter === 'none') { prev.classList.remove('on'); return; }
+    // Cuando termina la transición de entrada, se oculta la escena anterior
+    const done = e => {
+      if (e.target !== next) return;
+      next.removeEventListener('animationend', done);
+      prev.classList.remove('on');
+    };
+    next.addEventListener('animationend', done);
   }
 
-  document.getElementById('replay').addEventListener('click', play);
-  play();
+  function update() {
+    let i = starts.findIndex((st, k) => t < st + Number(scenes[k].dataset.dur));
+    if (i === -1) i = scenes.length - 1;
+    if (i !== current) showScene(i);
+    fills.forEach((f, k) => {
+      const d = Number(scenes[k].dataset.dur);
+      f.style.width = Math.max(0, Math.min(1, (t - starts[k]) / d)) * 100 + '%';
+    });
+    document.getElementById('time').textContent =
+      `${(t / 1000).toFixed(1)} / ${(total / 1000).toFixed(1)} s`;
+  }
+
+  function tick(now) {
+    if (!playing) return;
+    t += Math.min(now - last, 100);   // evita saltos si la pestaña estuvo oculta
+    last = now;
+    if (t >= total) { t = total; update(); finish(); return; }
+    update();
+    requestAnimationFrame(tick);
+  }
+
+  function play() {
+    if (t >= total) return restart();
+    playing = true;
+    stage.classList.remove('paused');
+    document.getElementById('playBtn').textContent = '❚❚';
+    startOverlay.hidden = true; endOverlay.hidden = true;
+    last = performance.now();
+    requestAnimationFrame(tick);
+  }
+  function pause() {
+    playing = false;
+    stage.classList.add('paused');
+    document.getElementById('playBtn').textContent = '▶';
+  }
+  function finish() { pause(); endOverlay.hidden = false; }
+
+  // Reinicia todas las animaciones y salta al inicio de la escena i
+  function jumpTo(i) {
+    scenes.forEach(s => s.classList.remove('on'));
+    void stage.offsetWidth;          // fuerza al navegador a "olvidar" las animaciones
+    current = -1;
+    t = starts[i];
+    update();
+    play();
+  }
+  function restart() { jumpTo(0); }
+
+  // ==========================================================
+  //  3) CONTROLES
+  // ==========================================================
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay = document.getElementById('endOverlay');
+  document.getElementById('startBtn').onclick = restart;
+  document.getElementById('againBtn').onclick = restart;
+  document.getElementById('restartBtn').onclick = restart;
+  document.getElementById('playBtn').onclick = () => {
+    if (current === -1) return restart();
+    playing ? pause() : play();
+  };
+  document.getElementById('fsBtn').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else viewport.requestFullscreen?.();
+  };
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); document.getElementById('playBtn').click(); }
+  });
+
+  // Muestra el primer cuadro detrás de la pantalla de inicio
+  stage.classList.add('paused');
+  update();
 </script>
 </body>
 </html>
