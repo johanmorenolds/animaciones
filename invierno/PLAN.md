@@ -1,7 +1,8 @@
 # Plan: «Del otoño al invierno» — animación para una niña de 3 años (Alemania)
 
-Estado: **plan** (todavía no hay animación). Cuando se apruebe, se construye en `invierno/index.html`
-copiando `_plantilla/`, siguiendo `CLAUDE.md`.
+Estado: **construida** en `invierno/index.html` (a partir de `_plantilla/`).
+Decisiones: la niña se llama **Talulla**; el texto lo **lee un adulto** en voz alta (sin voz automática);
+**con** palabras en alemán; duración ≈ **81 s**.
 
 ## 1. Idea en una frase
 

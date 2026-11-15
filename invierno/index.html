@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Del otoño al invierno</title>
+<!--
+  «DEL OTOÑO AL INVIERNO» — explicación del invierno para Talulla (3 años). Basada en la plantilla en "modo vídeo".
+  Copia esta carpeta, renómbrala y edita SOLO las escenas (y estilos nuevos si hacen falta).
+  Lee CLAUDE.md / README.md en la raíz del repositorio para el concepto y las reglas.
+
+  - Un escenario fijo de 1280x720 (como un vídeo HD) que se escala al tamaño de la ventana.
+  - La historia se divide en ESCENAS (<section class="scene">). Solo se ve una a la vez.
+  - Cada escena dura "data-dur" milisegundos y entra con la transición "data-enter".
+  - Un reloj en JavaScript (la "línea de tiempo") decide qué escena toca en cada momento.
+  - Las animaciones dentro de cada escena son CSS @keyframes que se activan con la clase "on".
+-->
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111;
+    --paper: #fdf6e3;
+    --yellow: #ffd60a;
+    --red: #e63946;
+    --blue: #3a86ff;
+    --sky: #8ecae6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: #1a1a1a; color: #eee;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Comic Neue', 'Comic Sans MS', cursive;
+    padding: 16px;
+  }
+
+  /* =========================================================
+     EL REPRODUCTOR: pantalla 16:9 + escenario escalado dentro
+     ========================================================= */
+  .player { width: min(100%, calc((100vh - 110px) * 16 / 9)); min-width: 280px; }
+  .viewport {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    background: #000; overflow: hidden;
+    border: 4px solid #000; box-shadow: 0 10px 40px rgba(0,0,0,.6);
+  }
+  .viewport:fullscreen { border: 0; }
+  .stage {
+    position: absolute; left: 50%; top: 50%;
+    width: 1280px; height: 720px;
+    transform: translate(-50%, -50%) scale(var(--s, .5));
+    overflow: hidden; background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* Pausa: congela TODAS las animaciones CSS del escenario */
+  .stage.paused, .stage.paused *, .stage.paused *::before, .stage.paused *::after {
+    animation-play-state: paused !important;
+  }
+
+  /* =========================================================
+     ESCENAS y TRANSICIONES entre escenas
+     ========================================================= */
+  .scene { position: absolute; inset: 0; visibility: hidden; overflow: hidden; isolation: isolate; z-index: 0; }
+  .scene.on { visibility: visible; }
+
+  /* Iris: un círculo que se abre desde el centro */
+  .scene.on[data-enter="iris"]  { animation: t-iris .9s ease-in-out both; }
+  @keyframes t-iris { from { clip-path: circle(0% at 50% 55%); } to { clip-path: circle(80% at 50% 55%); } }
+
+  /* Destello: la escena entra con zoom y un flash blanco encima */
+  .scene.on[data-enter="flash"] { animation: t-zoom .5s ease-out both; }
+  .scene.on[data-enter="flash"]::after {
+    content: ""; position: absolute; inset: 0; background: #fff; z-index: 50;
+    animation: t-flash .5s ease-out both; pointer-events: none;
+  }
+  @keyframes t-zoom  { from { transform: scale(1.35); } to { transform: none; } }
+  @keyframes t-flash { from { opacity: 1; } to { opacity: 0; } }
+
+  /* Barrido diagonal de izquierda a derecha */
+  .scene.on[data-enter="wipe"] { animation: t-wipe .7s cubic-bezier(.7,0,.3,1) both; }
+  @keyframes t-wipe {
+    from { clip-path: polygon(0 0, 0 0, -30% 100%, -30% 100%); }
+    to   { clip-path: polygon(0 0, 130% 0, 100% 100%, -30% 100%); }
+  }
+
+  /* Paso de página: entra desde la derecha girando un poco */
+  .scene.on[data-enter="page"] {
+    animation: t-page .8s cubic-bezier(.2,.9,.3,1.1) both;
+    box-shadow: -30px 0 60px rgba(0,0,0,.5);
+  }
+  @keyframes t-page { from { transform: translateX(105%) rotate(8deg); } to { transform: none; } }
+
+  /* =========================================================
+     ESTILO CÓMIC (fondos, tinta, trama)
+     ========================================================= */
+  .halftone::before {
+    content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(0,0,0,.18) 2.4px, transparent 2.6px);
+    background-size: 14px 14px;
+  }
+  .bg-yellow { background-color: var(--yellow); }
+  .bg-sky    { background-color: var(--sky); }
+  .bg-paper  { background-color: var(--paper); }
+  .bg-red    { background-color: var(--red); }
+  .frame { position: absolute; inset: 0; border: 10px solid var(--ink); z-index: 40; pointer-events: none; }
+
+  .speedlines {
+    position: absolute; inset: -60%; z-index: 0;
+    background: repeating-conic-gradient(from 0deg at 50% 50%,
+      rgba(255,255,255,.85) 0deg 4deg, transparent 4deg 14deg);
+    animation: spin 8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Ciudad de fondo */
+  .city {
+    position: absolute; left: 0; right: 0; bottom: 40px; height: 300px; z-index: 0;
+    display: flex; align-items: flex-end; gap: 14px; padding: 0 30px;
+  }
+  .city i {
+    flex: 1; border: 5px solid var(--ink); border-bottom: 0;
+    background:
+      repeating-linear-gradient(90deg, transparent 0 18px, rgba(255,214,10,.85) 18px 32px, transparent 32px 50px),
+      #1d3557;
+    background-size: 100% 100%;
+    -webkit-mask: repeating-linear-gradient(180deg, #000 0 30px, rgba(0,0,0,.92) 30px 48px);
+  }
+  .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 44px; background: #495057; border-top: 6px solid var(--ink); z-index: 1; }
+
+  .cloud {
+    position: absolute; z-index: 0; width: 180px; height: 60px; background: #fff;
+    border: 5px solid var(--ink); border-radius: 40px;
+  }
+  .scene.on .cloud { animation: drift 12s linear both; }
+  @keyframes drift { to { translate: 260px 0; } }
+
+  /* =========================================================
+     PERSONAJES
+     ========================================================= */
+  .char { position: absolute; bottom: 30px; width: 220px; height: 367px; z-index: 5; overflow: visible; }
+
+  .scene.on .walk { animation: walkIn 1.6s ease-out both, bob .35s ease-in-out 4 alternate; }
+  @keyframes walkIn { from { transform: translateX(-620px); } to { transform: none; } }
+  @keyframes bob { to { translate: 0 -12px; } }
+
+  .scene.on .drop { animation: drop .7s cubic-bezier(.3,1.7,.5,1) .3s both; }
+  @keyframes drop { from { transform: translateY(-900px); } to { transform: none; } }
+
+  .scene.on .shake { animation: shake .1s linear .85s 8; }
+  @keyframes shake {
+    25% { transform: translate(-10px, 5px) rotate(-.6deg); }
+    75% { transform: translate(10px, -5px) rotate(.6deg); }
+  }
+
+  .scene.on .punch { animation: punch .55s cubic-bezier(.5,-0.6,.4,1.6) .5s both; }
+  @keyframes punch { 0% { transform: none; } 50% { transform: translateX(-50px); } 100% { transform: translateX(230px); } }
+
+  .scene.on .flyaway { animation: fly 1.1s ease-in 1s both; }
+  @keyframes fly { to { transform: translate(800px,-520px) rotate(720deg) scale(.2); opacity: 0; } }
+
+  .scene.on .peek { animation: peek .8s cubic-bezier(.3,1.6,.5,1) 2.2s both; }
+  @keyframes peek { from { transform: translateY(420px) rotate(-12deg); } to { transform: translateY(170px) rotate(-12deg); } }
+
+  /* Signo de sorpresa "!" */
+  .surprise {
+    position: absolute; z-index: 6; font-family: 'Bangers', Impact, sans-serif; font-size: 110px;
+    color: var(--red); -webkit-text-stroke: 4px var(--ink); transform: scale(0);
+  }
+  .scene.on .surprise { animation: boom .4s cubic-bezier(.2,2,.4,1) .9s forwards; }
+
+  /* =========================================================
+     TEXTOS: globos, narrador, onomatopeyas
+     ========================================================= */
+  .bubble {
+    position: absolute; z-index: 20;
+    background: #fff; border: 6px solid var(--ink); border-radius: 50% / 45%;
+    padding: 26px 40px; font-size: 38px; text-align: center;
+    transform: scale(0); transform-origin: bottom left;
+  }
+  .bubble::after {
+    content: ""; position: absolute; bottom: -34px; left: 50px;
+    border: 18px solid transparent; border-top: 28px solid var(--ink);
+  }
+  .bubble.right { transform-origin: bottom right; }
+  .bubble.right::after { left: auto; right: 50px; }
+  .scene.on .bubble { animation: pop .35s cubic-bezier(.3,1.8,.5,1) forwards; animation-delay: var(--d, 1s); }
+  @keyframes pop { to { transform: scale(1); } }
+
+  .type { display: inline-block; white-space: nowrap; overflow: hidden; width: 0; vertical-align: bottom; }
+  .scene.on .type { animation: typing var(--t, 1s) steps(var(--n, 20)) forwards; animation-delay: calc(var(--d, 1s) + .35s); }
+  @keyframes typing { to { width: calc(var(--n) * 1ch); } }
+
+  .caption {
+    position: absolute; top: 30px; left: 30px; z-index: 20;
+    background: var(--yellow); border: 5px solid var(--ink);
+    padding: 10px 22px; font-size: 30px; text-transform: uppercase;
+    box-shadow: 7px 7px 0 var(--ink);
+    transform: translateY(-160px); opacity: 0;
+  }
+  .scene.on .caption { animation: slideDown .5s cubic-bezier(.3,1.6,.5,1) forwards; animation-delay: var(--d, .4s); }
+  @keyframes slideDown { to { transform: none; opacity: 1; } }
+
+  .sfx {
+    position: absolute; z-index: 30;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 6px; line-height: 1;
+    color: var(--yellow);
+    -webkit-text-stroke: 5px var(--ink);
+    text-shadow: 10px 10px 0 var(--red), 15px 15px 0 var(--ink);
+    transform: scale(0) rotate(-30deg);
+  }
+  .scene.on .sfx { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+  @keyframes boom { to { transform: scale(1) rotate(var(--r, -10deg)); } }
+
+  .burst {
+    position: absolute; z-index: 25; width: 420px; height: 420px;
+    background: #fff; border: 6px solid var(--ink);
+    clip-path: polygon(50% 0,61% 30%,95% 18%,72% 45%,100% 62%,66% 66%,75% 100%,50% 75%,22% 98%,32% 66%,0 70%,26% 48%,4% 20%,38% 32%);
+    transform: scale(0);
+  }
+  .scene.on .burst { animation: boom .5s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+
+  /* Escena de título */
+  .title-line {
+    position: absolute; left: 0; right: 0; text-align: center; z-index: 30;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 8px; line-height: 1;
+    color: #fff; -webkit-text-stroke: 6px var(--ink);
+    text-shadow: 10px 10px 0 var(--red), 16px 16px 0 var(--ink);
+    transform: scale(0);
+  }
+  .scene.on .title-line { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .3s); }
+
+
+  /* =========================================================
+     «DEL OTOÑO AL INVIERNO» — piezas propias de esta animación
+     Todo va LENTO y SUAVE: es para una niña de 3 años.
+     ========================================================= */
+  :root { --otono: #f4a261; --hoja1: #e76f51; --hoja2: #f4a261; --hoja3: #e9c46a; --hoja4: #d62828;
+          --cielo-invierno: #b8cfdc; --hierba: #a7c957; --escarcha: #dfe7ec; }
+
+  /* Transiciones más lentas y tranquilas que en la plantilla */
+  .scene.on[data-enter="iris"] { animation-duration: 1.8s; }
+  .scene.on[data-enter="wipe"] { animation-duration: 1.6s; animation-timing-function: ease-in-out; }
+  .scene.on[data-enter="page"] { animation-duration: 1.8s; animation-timing-function: cubic-bezier(.3,.8,.4,1); }
+
+  .bg-invierno { background-color: var(--cielo-invierno); }
+
+  /* Suelo, casa y árbol */
+  .suelo { position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 2;
+           background: var(--hierba); border-top: 6px solid var(--ink); }
+  .suelo.frio  { background: var(--escarcha); }
+  .suelo.nieve { background: #fff; }
+  .casa  { position: absolute; left: 870px; bottom: 100px; width: 340px; height: 340px; z-index: 2; overflow: visible; }
+  .arbol { position: absolute; left: 110px; bottom: 100px; width: 330px; height: 460px; z-index: 2; overflow: visible; }
+
+  /* Capas que aparecen despacio (noche, cielo gris, nieve, luces…) */
+  .capa { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; }
+  .scene.on .funde { animation: fundir var(--f, 3s) ease-in-out var(--d, 0s) both; }
+  @keyframes fundir { from { opacity: 0; } to { opacity: var(--o, 1); } }
+
+  /* Hojas de otoño */
+  .hoja { position: absolute; z-index: 3; width: 36px; height: 26px;
+          background: var(--c, var(--hoja1)); border: 3px solid var(--ink);
+          border-radius: 0 100% 0 100%; transform: rotate(var(--a, 0deg)); }
+  .scene.on .cae { animation: caer var(--f, 6s) ease-in-out var(--d, 0s) both; }
+  @keyframes caer {
+    0%   { transform: translate(0, 0) rotate(var(--a)); }
+    25%  { transform: translate(var(--x), calc(var(--y) * .25)) rotate(calc(var(--a) + 70deg)); }
+    50%  { transform: translate(calc(var(--x) * -1), calc(var(--y) * .5)) rotate(calc(var(--a) - 30deg)); }
+    75%  { transform: translate(var(--x), calc(var(--y) * .75)) rotate(calc(var(--a) + 50deg)); }
+    100% { transform: translate(var(--ex, 0px), var(--y)) rotate(calc(var(--a) + 10deg)); }
+  }
+  /* Título: la hoja que cae se convierte en copo de nieve */
+  .scene.on .anieve { animation: anieve var(--f, 10s) linear var(--d, 0s) infinite both; }
+  @keyframes anieve {
+    0%   { transform: translate(0, -60px) rotate(var(--a)); background: var(--c); border-radius: 0 100% 0 100%; }
+    25%  { transform: translate(var(--x), 140px) rotate(calc(var(--a) + 90deg)); }
+    45%  { background: var(--c); border-radius: 0 100% 0 100%; }
+    60%  { background: #fff; border-radius: 50%; }
+    75%  { transform: translate(calc(var(--x) * -1), 560px) rotate(calc(var(--a) + 200deg)); }
+    100% { transform: translate(0, 820px) rotate(calc(var(--a) + 260deg)); background: #fff; border-radius: 50%; }
+  }
+
+  /* Copos de nieve */
+  .copo { position: absolute; top: -40px; z-index: 4; width: var(--s, 20px); height: var(--s, 20px);
+          background: #fff; border: 3px solid var(--ink); border-radius: 50%; }
+  .scene.on .copo { animation: nevar var(--f, 10s) linear var(--d, 0s) infinite both; }
+  @keyframes nevar {
+    0%   { transform: translate(0, 0); }
+    50%  { transform: translate(var(--x, 30px), 400px); }
+    100% { transform: translate(0, 800px); }
+  }
+
+  /* Viento */
+  .viento { position: absolute; left: 0; z-index: 4; width: 280px; height: 30px;
+            border-top: 7px solid #fff; border-radius: 50% 50% 0 0; opacity: 0;
+            filter: drop-shadow(3px 3px 0 var(--ink)); }
+  .scene.on .viento { animation: soplar 3s ease-in-out var(--d, 0s) both; }
+  @keyframes soplar { 0% { transform: translateX(-350px); opacity: 0; } 25% { opacity: 1; }
+                      80% { opacity: 1; } 100% { transform: translateX(1400px); opacity: 0; } }
+
+  /* Nubes grises que llegan despacio */
+  .nube-gris { position: absolute; z-index: 3; width: 340px; height: 100px; background: #adb5bd;
+               border: 5px solid var(--ink); border-radius: 60px; }
+  .scene.on .nube-gris { animation: llegarNube 4s ease-out var(--d, 0s) both; }
+  @keyframes llegarNube { from { transform: translateX(-700px); } to { transform: none; } }
+
+  /* El sol que cruza el cielo bajito */
+  .sol { position: absolute; left: 0; top: 0; width: 170px; height: 170px; z-index: 1; overflow: visible; }
+  .scene.on .sol-camino { animation: solCamino 7s linear .6s both; }
+  @keyframes solCamino {
+    0%   { transform: translate(60px, 520px); }
+    25%  { transform: translate(300px, 330px); }
+    50%  { transform: translate(560px, 270px); }
+    75%  { transform: translate(800px, 340px); }
+    100% { transform: translate(1010px, 600px); }
+  }
+  .estrella { position: absolute; z-index: 1; font-size: 40px; color: var(--yellow);
+              -webkit-text-stroke: 2px var(--ink); opacity: 0; }
+
+  /* Personajes */
+  .nina   { position: absolute; bottom: 80px; width: 180px; height: 300px; z-index: 5; overflow: visible; }
+  .nina.grande { width: 216px; height: 360px; }
+  .erizo  { position: absolute; bottom: 82px; width: 200px; height: 135px; z-index: 6; overflow: visible; }
+  .mira-izq { scale: -1 1; }
+  .monton { position: absolute; bottom: 86px; z-index: 5; overflow: visible; transform-origin: 50% 100%; }
+
+  .scene.on .andar { animation: andar var(--f, 4s) ease-in-out var(--d, 0s) both, balanceo .5s ease-in-out var(--d, 0s) 8 alternate; }
+  @keyframes andar { from { transform: translateX(var(--desde, 600px)); } to { transform: none; } }
+  @keyframes balanceo { to { translate: 0 -8px; } }
+
+  .scene.on .crece { animation: crece var(--f, 4s) ease-out var(--d, 0s) both; }
+  @keyframes crece { from { transform: scale(.75, .35); } to { transform: none; } }
+
+  .scene.on .entra-monton { animation: entraMonton 3s ease-in-out var(--d, 1s) both; }
+  @keyframes entraMonton { 0% { transform: none; opacity: 1; } 80% { opacity: 1; }
+                           100% { transform: translateX(-200px) scale(.6); opacity: 0; } }
+
+  .scene.on .tiembla { animation: tiembla .16s linear var(--d, .5s) 22 alternate; }
+  @keyframes tiembla { from { translate: -4px 0; } to { translate: 4px 0; } }
+
+  .scene.on .salta { animation: salta .7s ease-in-out var(--d, 0s) 8 alternate; }
+  @keyframes salta { to { translate: 0 -26px; } }
+
+  .vaho { position: absolute; z-index: 6; width: 30px; height: 30px; border-radius: 50%;
+          background: #fff; border: 3px solid var(--ink); opacity: 0; }
+  .scene.on .vaho { animation: vaho 2.4s ease-out var(--d, 0s) infinite both; }
+  @keyframes vaho { 0% { transform: scale(.3); opacity: 0; } 15% { opacity: .95; }
+                    100% { transform: translate(70px, -70px) scale(1.6); opacity: 0; } }
+
+  .zzz { position: absolute; z-index: 7; font-family: 'Bangers', Impact, sans-serif; font-size: 56px;
+         color: var(--blue); -webkit-text-stroke: 2px var(--ink); opacity: 0; }
+  .scene.on .zzz { animation: zzz 3.6s ease-out var(--d, 0s) infinite both; }
+  @keyframes zzz { 0% { transform: scale(.4); opacity: 0; } 20% { opacity: 1; }
+                   100% { transform: translate(70px, -150px) scale(1.2); opacity: 0; } }
+
+  /* Cosas que aparecen con un rebote suave (ropa, muñeco de nieve) */
+  .ponte, .aparece { transform-box: fill-box; transform-origin: 50% 100%; opacity: 0; }
+  .scene.on .ponte   { animation: ponte 1.3s cubic-bezier(.4,1.5,.6,1) var(--d, 0s) both; }
+  @keyframes ponte   { from { transform: translateY(-70px); opacity: 0; } 30% { opacity: 1; } to { transform: none; opacity: 1; } }
+  .scene.on .aparece { animation: aparece 1.4s cubic-bezier(.4,1.5,.6,1) var(--d, 0s) both; }
+  @keyframes aparece { from { transform: scale(0); opacity: 0; } 20% { opacity: 1; } to { transform: none; opacity: 1; } }
+
+  /* Textos: narrador (lo lee el adulto), globos y palabras en alemán */
+  .narra { position: absolute; top: 28px; left: 0; right: 0; margin: 0 auto; z-index: 20;
+           width: fit-content; max-width: 1040px; text-align: center;
+           background: var(--yellow); border: 5px solid var(--ink); box-shadow: 7px 7px 0 var(--ink);
+           padding: 14px 30px; font-size: 38px; line-height: 1.25; opacity: 0; }
+  .scene.on .narra { animation: narra 1.4s ease-out var(--d, .8s) both; }
+  @keyframes narra { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: none; } }
+
+  .bubble { white-space: nowrap; }
+  .scene.on .bubble { animation: pop 1.1s cubic-bezier(.4,1.5,.6,1) forwards; animation-delay: var(--d, 1s); }
+
+  .de { position: absolute; z-index: 21; background: #fff; border: 4px solid var(--ink); border-radius: 16px;
+        box-shadow: 4px 4px 0 var(--ink); padding: 4px 16px; font-size: 28px; white-space: nowrap; opacity: 0; }
+  .de i { font-style: normal; color: #5a6570; }
+  .de i::before { content: "🇩🇪 "; font-size: 22px; }
+  .scene.on .de { animation: aparece 1.2s cubic-bezier(.4,1.5,.6,1) var(--d, 2s) both; }
+
+  /* Título suave (sin giro brusco) */
+  .scene.on .title-line { animation: tituloSuave 1.6s cubic-bezier(.4,1.4,.6,1) var(--d, .3s) both; }
+  @keyframes tituloSuave { from { transform: scale(0); } to { transform: scale(1) rotate(var(--r, 0deg)); } }
+  .title-line.otono    { color: var(--otono); }
+  .title-line.invierno { color: #fff; text-shadow: 10px 10px 0 var(--blue), 16px 16px 0 var(--ink); }
+  .scene.on .sube { animation: sube 1.6s cubic-bezier(.4,1.4,.6,1) var(--d, 1s) both; }
+  @keyframes sube { from { transform: translateY(400px); } to { transform: none; } }
+
+  /* =========================================================
+     CONTROLES DEL REPRODUCTOR
+     ========================================================= */
+  .overlay {
+    position: absolute; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(3px);
+  }
+  .overlay[hidden] { display: none; }
+  .overlay h2 {
+    margin: 0; font-family: 'Bangers', Impact, sans-serif; letter-spacing: 3px; font-weight: normal;
+    font-size: clamp(28px, 6vw, 64px); color: var(--yellow); -webkit-text-stroke: 2px #000;
+    text-shadow: 4px 4px 0 var(--red);
+  }
+  .big {
+    font-family: 'Bangers', Impact, sans-serif; font-size: clamp(20px, 3.5vw, 34px); letter-spacing: 2px;
+    background: var(--red); color: #fff; border: 4px solid #000; padding: 8px 28px;
+    box-shadow: 5px 5px 0 #000; cursor: pointer;
+  }
+  .big:active { transform: translate(3px,3px); box-shadow: 2px 2px 0 #000; }
+
+  .controls {
+    display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap;
+  }
+  .controls button, .controls a {
+    font: inherit; font-size: 18px; line-height: 1;
+    background: #333; color: #fff; border: 2px solid #555; border-radius: 6px;
+    padding: 8px 12px; cursor: pointer; text-decoration: none;
+  }
+  .controls button:hover, .controls a:hover { background: #444; }
+  .progress { flex: 1; min-width: 160px; display: flex; gap: 4px; height: 14px; cursor: pointer; }
+  .seg { position: relative; background: #444; border-radius: 3px; overflow: hidden; }
+  .seg > b { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--yellow); }
+  .seg:hover { background: #555; }
+  .time { font-variant-numeric: tabular-nums; font-size: 15px; color: #bbb; min-width: 90px; text-align: right; }
+</style>
+</head>
+<body>
+
+<!-- Personajes y decorados en SVG: se dibujan una vez y se reutilizan con <use> -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="talulla" viewBox="0 0 120 200"><circle cx="24" cy="52" r="13" fill="#6b3e26" stroke="#111" stroke-width="4"/><circle cx="96" cy="52" r="13" fill="#6b3e26" stroke="#111" stroke-width="4"/><rect x="44" y="150" width="13" height="40" fill="#6d597a" stroke="#111" stroke-width="4"/><rect x="63" y="150" width="13" height="40" fill="#6d597a" stroke="#111" stroke-width="4"/><ellipse cx="48" cy="192" rx="12" ry="6" fill="#333" stroke="#111" stroke-width="3"/><ellipse cx="72" cy="192" rx="12" ry="6" fill="#333" stroke="#111" stroke-width="3"/><path d="M42 98 L28 134" stroke="#111" stroke-width="17" stroke-linecap="round"/><path d="M42 98 L28 134" stroke="#e63946" stroke-width="10" stroke-linecap="round"/><path d="M78 98 L92 134" stroke="#111" stroke-width="17" stroke-linecap="round"/><path d="M78 98 L92 134" stroke="#e63946" stroke-width="10" stroke-linecap="round"/><circle cx="27" cy="138" r="7" fill="#f4c095" stroke="#111" stroke-width="3"/><circle cx="93" cy="138" r="7" fill="#f4c095" stroke="#111" stroke-width="3"/><path d="M42 86 L78 86 L92 158 L28 158 Z" fill="#e63946" stroke="#111" stroke-width="5" stroke-linejoin="round"/><circle cx="60" cy="110" r="3.5" fill="#111"/><circle cx="60" cy="128" r="3.5" fill="#111"/><circle cx="60" cy="55" r="32" fill="#f4c095" stroke="#111" stroke-width="5"/><path d="M28 52 Q30 18 60 20 Q90 18 92 52 Q82 36 66 34 Q60 42 48 36 Q36 40 28 52 Z" fill="#6b3e26" stroke="#111" stroke-width="4" stroke-linejoin="round"/><circle cx="49" cy="58" r="4.5" fill="#111"/><circle cx="71" cy="58" r="4.5" fill="#111"/><circle cx="50.5" cy="56.5" r="1.5" fill="#fff"/><circle cx="72.5" cy="56.5" r="1.5" fill="#fff"/><circle cx="41" cy="68" r="5" fill="#f28482" opacity=".7"/><circle cx="79" cy="68" r="5" fill="#f28482" opacity=".7"/><path d="M51 70 Q60 78 69 70" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/></symbol>
+    <symbol id="talulla-abrigada" viewBox="0 0 120 200"><use href="#talulla"/><rect x="40" y="168" width="20" height="28" rx="5" fill="#ffd60a" stroke="#111" stroke-width="4"/><rect x="60" y="168" width="20" height="28" rx="5" fill="#ffd60a" stroke="#111" stroke-width="4"/><circle cx="27" cy="138" r="9" fill="#2a9d8f" stroke="#111" stroke-width="4"/><circle cx="93" cy="138" r="9" fill="#2a9d8f" stroke="#111" stroke-width="4"/><rect x="34" y="80" width="52" height="15" rx="7" fill="#3a86ff" stroke="#111" stroke-width="4"/><rect x="64" y="86" width="13" height="34" rx="4" fill="#3a86ff" stroke="#111" stroke-width="4"/><path d="M27 50 Q27 14 60 14 Q93 14 93 50 Z" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><rect x="24" y="42" width="72" height="13" rx="6" fill="#fff" stroke="#111" stroke-width="4"/><circle cx="60" cy="11" r="10" fill="#fff" stroke="#111" stroke-width="4"/></symbol>
+    <symbol id="erizo" viewBox="0 0 170 115"><polygon points="5,95 27,89 11,76 33,77 24,60 44,66 42,48 59,60 63,41 75,58 86,41 91,60 108,47 105,66 126,59 117,76 139,75 123,89 120,100 20,100" fill="#6b4226" stroke="#111" stroke-width="5" stroke-linejoin="round"/><ellipse cx="50" cy="106" rx="13" ry="6" fill="#3d2614" stroke="#111" stroke-width="3"/><ellipse cx="100" cy="106" rx="13" ry="6" fill="#3d2614" stroke="#111" stroke-width="3"/><ellipse cx="78" cy="94" rx="56" ry="13" fill="#e0b07a" stroke="#111" stroke-width="5"/><path d="M95 70 Q115 58 150 74 Q158 80 150 88 Q120 102 98 94 Z" fill="#e0b07a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><circle cx="155" cy="79" r="7" fill="#111"/><circle cx="128" cy="72" r="5.5" fill="#111"/><circle cx="130" cy="70" r="1.8" fill="#fff"/><circle cx="124" cy="86" r="5" fill="#f28482" opacity=".8"/><path d="M136 90 Q142 93 147 89" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="erizo-duerme" viewBox="0 0 170 115"><polygon points="5,95 27,89 11,76 33,77 24,60 44,66 42,48 59,60 63,41 75,58 86,41 91,60 108,47 105,66 126,59 117,76 139,75 123,89 120,100 20,100" fill="#6b4226" stroke="#111" stroke-width="5" stroke-linejoin="round"/><ellipse cx="50" cy="106" rx="13" ry="6" fill="#3d2614" stroke="#111" stroke-width="3"/><ellipse cx="100" cy="106" rx="13" ry="6" fill="#3d2614" stroke="#111" stroke-width="3"/><ellipse cx="78" cy="94" rx="56" ry="13" fill="#e0b07a" stroke="#111" stroke-width="5"/><path d="M95 70 Q115 58 150 74 Q158 80 150 88 Q120 102 98 94 Z" fill="#e0b07a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><circle cx="155" cy="79" r="7" fill="#111"/><path d="M121 72 Q128 78 135 72" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/><circle cx="124" cy="86" r="5" fill="#f28482" opacity=".8"/><path d="M136 90 Q142 93 147 89" fill="none" stroke="#111" stroke-width="3" stroke-linecap="round"/></symbol>
+    <symbol id="sol" viewBox="0 0 200 200"><polygon points="192,100 165,111 165,89" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="180,146 151,142 162,123" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="146,180 123,162 142,151" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="100,192 89,165 111,165" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="54,180 58,151 77,162" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="20,146 38,123 49,142" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="8,100 35,89 35,111" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="20,54 49,58 38,77" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="54,20 77,38 58,49" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="100,8 111,35 89,35" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="146,20 142,49 123,38" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><polygon points="180,54 162,77 151,58" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><circle cx="100" cy="100" r="60" fill="#ffd60a" stroke="#111" stroke-width="6"/><path d="M72 92 Q80 84 88 92 M112 92 Q120 84 128 92" fill="none" stroke="#111" stroke-width="5" stroke-linecap="round"/><circle cx="72" cy="112" r="8" fill="#f4a261"/><circle cx="128" cy="112" r="8" fill="#f4a261"/><path d="M84 118 Q100 132 116 118" fill="none" stroke="#111" stroke-width="5" stroke-linecap="round"/></symbol>
+    <symbol id="arbol" viewBox="0 0 300 420"><polygon points="122,420 178,420 168,250 150,205 132,250" fill="#7f5539" stroke="#111" stroke-width="6" stroke-linejoin="round"/><path d="M150 262 L70 170 L40 120" fill="none" stroke="#111" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 262 L70 170 L40 120" fill="none" stroke="#7f5539" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><path d="M70 170 L92 100" fill="none" stroke="#111" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/><path d="M70 170 L92 100" fill="none" stroke="#7f5539" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><path d="M152 232 L230 140 L270 92" fill="none" stroke="#111" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M152 232 L230 140 L270 92" fill="none" stroke="#7f5539" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><path d="M230 140 L200 70" fill="none" stroke="#111" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/><path d="M230 140 L200 70" fill="none" stroke="#7f5539" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 215 L150 60" fill="none" stroke="#111" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 215 L150 60" fill="none" stroke="#7f5539" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="arbol-nieve" viewBox="0 0 300 420"><path d="M150 253 L70 161 L40 111" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M70 161 L92 91" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M152 223 L230 131 L270 83" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M230 131 L200 61" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M150 206 L150 51" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="casa" viewBox="0 0 320 320"><rect x="208" y="40" width="36" height="80" fill="#9c6644" stroke="#111" stroke-width="5"/><rect x="40" y="140" width="240" height="176" fill="#f2cc8f" stroke="#111" stroke-width="6"/><polygon points="16,152 160,30 304,152" fill="#bc4749" stroke="#111" stroke-width="6" stroke-linejoin="round"/><rect x="135" y="222" width="50" height="94" fill="#7f5539" stroke="#111" stroke-width="5"/><circle cx="174" cy="270" r="4" fill="#111"/><rect x="65" y="178" width="52" height="52" fill="#5c7d99" stroke="#111" stroke-width="5"/><path d="M91.0 178 V230 M65 204.0 H117" stroke="#111" stroke-width="4"/><rect x="203" y="178" width="52" height="52" fill="#5c7d99" stroke="#111" stroke-width="5"/><path d="M229.0 178 V230 M203 204.0 H255" stroke="#111" stroke-width="4"/><circle cx="160" cy="105" r="18" fill="#5c7d99" stroke="#111" stroke-width="5"/></symbol>
+    <symbol id="casa-luz" viewBox="0 0 320 320"><rect x="65" y="178" width="52" height="52" fill="#ffd60a" stroke="#111" stroke-width="5"/><path d="M91.0 178 V230 M65 204.0 H117" stroke="#111" stroke-width="4"/><rect x="203" y="178" width="52" height="52" fill="#ffd60a" stroke="#111" stroke-width="5"/><path d="M229.0 178 V230 M203 204.0 H255" stroke="#111" stroke-width="4"/><circle cx="160" cy="105" r="18" fill="#ffd60a" stroke="#111" stroke-width="5"/></symbol>
+    <symbol id="casa-nieve" viewBox="0 0 320 320"><path d="M22 148 L160 34 L298 148" fill="none" stroke="#111" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 146 L160 32 L298 146" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><rect x="203" y="30" width="46" height="16" rx="8" fill="#fff" stroke="#111" stroke-width="4"/></symbol>
+    <symbol id="monton" viewBox="0 0 300 130"><path d="M8 128 Q30 18 150 12 Q270 18 292 128 Z" fill="#d4732a" stroke="#111" stroke-width="6" stroke-linejoin="round"/><ellipse cx="40" cy="45" rx="16" ry="9" transform="rotate(0 40 45)" fill="#e76f51" stroke="#111" stroke-width="3"/><ellipse cx="77" cy="68" rx="16" ry="9" transform="rotate(47 77 68)" fill="#f4a261" stroke="#111" stroke-width="3"/><ellipse cx="114" cy="91" rx="16" ry="9" transform="rotate(94 114 91)" fill="#e9c46a" stroke="#111" stroke-width="3"/><ellipse cx="151" cy="114" rx="16" ry="9" transform="rotate(141 151 114)" fill="#d62828" stroke="#111" stroke-width="3"/><ellipse cx="188" cy="67" rx="16" ry="9" transform="rotate(8 188 67)" fill="#e76f51" stroke="#111" stroke-width="3"/><ellipse cx="225" cy="90" rx="16" ry="9" transform="rotate(55 225 90)" fill="#f4a261" stroke="#111" stroke-width="3"/><ellipse cx="42" cy="113" rx="16" ry="9" transform="rotate(102 42 113)" fill="#e9c46a" stroke="#111" stroke-width="3"/><ellipse cx="79" cy="66" rx="16" ry="9" transform="rotate(149 79 66)" fill="#d62828" stroke="#111" stroke-width="3"/><ellipse cx="116" cy="89" rx="16" ry="9" transform="rotate(16 116 89)" fill="#e76f51" stroke="#111" stroke-width="3"/><ellipse cx="153" cy="112" rx="16" ry="9" transform="rotate(63 153 112)" fill="#f4a261" stroke="#111" stroke-width="3"/><ellipse cx="190" cy="65" rx="16" ry="9" transform="rotate(110 190 65)" fill="#e9c46a" stroke="#111" stroke-width="3"/><ellipse cx="227" cy="88" rx="16" ry="9" transform="rotate(157 227 88)" fill="#d62828" stroke="#111" stroke-width="3"/><ellipse cx="44" cy="111" rx="16" ry="9" transform="rotate(24 44 111)" fill="#e76f51" stroke="#111" stroke-width="3"/><ellipse cx="81" cy="64" rx="16" ry="9" transform="rotate(71 81 64)" fill="#f4a261" stroke="#111" stroke-width="3"/><ellipse cx="118" cy="87" rx="16" ry="9" transform="rotate(118 118 87)" fill="#e9c46a" stroke="#111" stroke-width="3"/><ellipse cx="155" cy="110" rx="16" ry="9" transform="rotate(165 155 110)" fill="#d62828" stroke="#111" stroke-width="3"/></symbol>
+  </defs>
+</svg>
+
+<div class="player">
+  <div class="viewport" id="viewport">
+    <div class="stage" id="stage">
+
+      <section class="scene bg-sky halftone" data-dur="6000" data-enter="none" data-name="Título">
+        <div class="hoja anieve" style="left:357px;top:0;--c:var(--hoja1);--a:107deg;--f:11.7s;--d:-7.4s;--x:50px"></div><div class="hoja anieve" style="left:462px;top:0;--c:var(--hoja2);--a:121deg;--f:14.0s;--d:-11.3s;--x:-30px"></div><div class="hoja anieve" style="left:1054px;top:0;--c:var(--hoja3);--a:0deg;--f:12.1s;--d:-0.2s;--x:50px"></div><div class="hoja anieve" style="left:161px;top:0;--c:var(--hoja4);--a:59deg;--f:10.6s;--d:-9.7s;--x:-50px"></div><div class="hoja anieve" style="left:914px;top:0;--c:var(--hoja1);--a:104deg;--f:14.0s;--d:-8.6s;--x:-50px"></div><div class="hoja anieve" style="left:693px;top:0;--c:var(--hoja2);--a:177deg;--f:12.2s;--d:-1.4s;--x:30px"></div><div class="hoja anieve" style="left:67px;top:0;--c:var(--hoja3);--a:22deg;--f:10.6s;--d:-1.3s;--x:-50px"></div><div class="hoja anieve" style="left:948px;top:0;--c:var(--hoja4);--a:87deg;--f:10.6s;--d:-4.3s;--x:-30px"></div><div class="hoja anieve" style="left:402px;top:0;--c:var(--hoja1);--a:120deg;--f:12.7s;--d:-11.0s;--x:-30px"></div><div class="hoja anieve" style="left:172px;top:0;--c:var(--hoja2);--a:53deg;--f:13.1s;--d:-8.8s;--x:-50px"></div><div class="hoja anieve" style="left:270px;top:0;--c:var(--hoja3);--a:143deg;--f:12.2s;--d:-10.1s;--x:-30px"></div><div class="hoja anieve" style="left:718px;top:0;--c:var(--hoja4);--a:137deg;--f:13.7s;--d:-5.6s;--x:30px"></div><div class="hoja anieve" style="left:944px;top:0;--c:var(--hoja1);--a:81deg;--f:12.0s;--d:-11.9s;--x:50px"></div><div class="hoja anieve" style="left:564px;top:0;--c:var(--hoja2);--a:23deg;--f:10.1s;--d:-1.6s;--x:50px"></div><div class="hoja anieve" style="left:25px;top:0;--c:var(--hoja3);--a:140deg;--f:12.0s;--d:-7.2s;--x:-30px"></div><div class="hoja anieve" style="left:1190px;top:0;--c:var(--hoja4);--a:142deg;--f:12.4s;--d:-12.2s;--x:-50px"></div><div class="hoja anieve" style="left:390px;top:0;--c:var(--hoja1);--a:160deg;--f:12.7s;--d:-4.4s;--x:30px"></div><div class="hoja anieve" style="left:729px;top:0;--c:var(--hoja2);--a:78deg;--f:13.0s;--d:-3.2s;--x:-30px"></div><div class="hoja anieve" style="left:154px;top:0;--c:var(--hoja3);--a:44deg;--f:13.7s;--d:-10.6s;--x:30px"></div><div class="hoja anieve" style="left:347px;top:0;--c:var(--hoja4);--a:173deg;--f:12.7s;--d:-6.6s;--x:-30px"></div><div class="hoja anieve" style="left:853px;top:0;--c:var(--hoja1);--a:41deg;--f:13.7s;--d:-13.1s;--x:-50px"></div><div class="hoja anieve" style="left:729px;top:0;--c:var(--hoja2);--a:96deg;--f:12.0s;--d:-8.0s;--x:-30px"></div><div class="hoja anieve" style="left:352px;top:0;--c:var(--hoja3);--a:112deg;--f:12.2s;--d:-9.9s;--x:50px"></div><div class="hoja anieve" style="left:137px;top:0;--c:var(--hoja4);--a:13deg;--f:13.3s;--d:-11.4s;--x:30px"></div><div class="hoja anieve" style="left:91px;top:0;--c:var(--hoja1);--a:43deg;--f:11.7s;--d:-4.6s;--x:30px"></div><div class="hoja anieve" style="left:319px;top:0;--c:var(--hoja2);--a:122deg;--f:13.9s;--d:-0.7s;--x:-30px"></div>
+        <div class="suelo "></div>
+        <div class="title-line otono" style="top:70px;font-size:140px;--d:.4s">Del otoño</div>
+        <div class="title-line invierno" style="top:210px;font-size:140px;--d:1.4s">al invierno</div>
+        <svg class="nina sube" style="left:250px;--d:2.6s"><use href="#talulla"/></svg>
+        <svg class="erizo sube" style="left:880px;--d:3.2s"><use href="#erizo"/></svg>
+        <div class="de" style="left:520px;top:430px;--d:3.8s"> <i>Herbst → Winter</i></div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-sky halftone" data-dur="9000" data-enter="iris" data-name="Es otoño">
+        
+        <svg class="casa"><use href="#casa"/></svg><svg class="arbol"><use href="#arbol"/></svg><div class="suelo "></div><div class="hoja" style="left:966px;top:684px;--c:var(--hoja3);--a:174deg;"></div><div class="hoja" style="left:965px;top:690px;--c:var(--hoja4);--a:5deg;"></div><div class="hoja" style="left:428px;top:648px;--c:var(--hoja1);--a:80deg;"></div><div class="hoja" style="left:1088px;top:685px;--c:var(--hoja2);--a:131deg;"></div><div class="hoja" style="left:421px;top:637px;--c:var(--hoja3);--a:178deg;"></div><div class="hoja" style="left:954px;top:663px;--c:var(--hoja2);--a:27deg;"></div><div class="hoja" style="left:330px;top:636px;--c:var(--hoja3);--a:78deg;"></div><div class="hoja" style="left:1143px;top:630px;--c:var(--hoja2);--a:171deg;"></div><div class="hoja" style="left:851px;top:682px;--c:var(--hoja2);--a:83deg;"></div><div class="hoja" style="left:362px;top:626px;--c:var(--hoja1);--a:92deg;"></div><div class="hoja" style="left:1122px;top:633px;--c:var(--hoja4);--a:33deg;"></div><div class="hoja" style="left:161px;top:629px;--c:var(--hoja3);--a:134deg;"></div><div class="hoja" style="left:429px;top:655px;--c:var(--hoja1);--a:108deg;"></div><div class="hoja" style="left:101px;top:684px;--c:var(--hoja2);--a:59deg;"></div>
+        <svg class="nina" style="left:520px"><use href="#talulla"/></svg>
+        <div class="hoja" style="left:214px;top:287px;--c:var(--hoja2);--a:19deg;"></div><div class="hoja cae" style="left:250px;top:297px;--c:var(--hoja4);--a:121deg;--d:1.5s;--f:6.5s;--x:30px;--y:315px;--ex:0px;"></div><div class="hoja" style="left:319px;top:210px;--c:var(--hoja2);--a:163deg;"></div><div class="hoja" style="left:220px;top:237px;--c:var(--hoja2);--a:91deg;"></div><div class="hoja" style="left:419px;top:275px;--c:var(--hoja3);--a:158deg;"></div><div class="hoja cae" style="left:376px;top:276px;--c:var(--hoja1);--a:40deg;--d:3.0s;--f:6.5s;--x:-40px;--y:336px;--ex:0px;"></div><div class="hoja" style="left:323px;top:224px;--c:var(--hoja4);--a:53deg;"></div><div class="hoja" style="left:321px;top:339px;--c:var(--hoja1);--a:24deg;"></div><div class="hoja" style="left:291px;top:319px;--c:var(--hoja3);--a:114deg;"></div><div class="hoja cae" style="left:331px;top:210px;--c:var(--hoja2);--a:67deg;--d:4.6s;--f:6.5s;--x:-30px;--y:402px;--ex:0px;"></div><div class="hoja" style="left:355px;top:295px;--c:var(--hoja3);--a:130deg;"></div><div class="hoja" style="left:231px;top:205px;--c:var(--hoja1);--a:72deg;"></div><div class="hoja cae" style="left:384px;top:276px;--c:var(--hoja1);--a:96deg;--d:1.0s;--f:6.5s;--x:30px;--y:252px;--ex:176px;"></div><div class="hoja" style="left:344px;top:341px;--c:var(--hoja2);--a:11deg;"></div><div class="hoja cae" style="left:343px;top:347px;--c:var(--hoja3);--a:22deg;--d:5.8s;--f:6.5s;--x:30px;--y:265px;--ex:0px;"></div><div class="hoja" style="left:257px;top:328px;--c:var(--hoja2);--a:83deg;"></div><div class="hoja" style="left:270px;top:350px;--c:var(--hoja1);--a:60deg;"></div><div class="hoja" style="left:387px;top:216px;--c:var(--hoja4);--a:117deg;"></div><div class="hoja" style="left:187px;top:235px;--c:var(--hoja3);--a:34deg;"></div><div class="hoja cae" style="left:411px;top:270px;--c:var(--hoja2);--a:87deg;--d:6.8s;--f:6.5s;--x:-40px;--y:342px;--ex:0px;"></div><div class="hoja" style="left:319px;top:248px;--c:var(--hoja4);--a:97deg;"></div><div class="hoja" style="left:287px;top:262px;--c:var(--hoja2);--a:95deg;"></div><div class="hoja" style="left:245px;top:294px;--c:var(--hoja4);--a:77deg;"></div><div class="hoja" style="left:308px;top:345px;--c:var(--hoja2);--a:131deg;"></div><div class="hoja" style="left:334px;top:349px;--c:var(--hoja4);--a:145deg;"></div><div class="hoja" style="left:331px;top:226px;--c:var(--hoja2);--a:115deg;"></div>
+        <div class="narra" style="--d:0.8s;">Ahora es otoño.<br>Las hojas se ponen de colores… y se caen.</div>
+        <div class="de" style="left:960px;top:210px;--d:3s">otoño <i>Herbst</i></div>
+        <div class="de" style="left:720px;top:500px;--d:7.8s">hoja <i>Blatt</i></div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-sky halftone" data-dur="9000" data-enter="page" data-name="Pincho prepara su cama">
+        
+        <svg class="casa"><use href="#casa"/></svg><svg class="arbol"><use href="#arbol"/></svg><div class="suelo "></div><div class="hoja" style="left:966px;top:684px;--c:var(--hoja3);--a:174deg;"></div><div class="hoja" style="left:965px;top:690px;--c:var(--hoja4);--a:5deg;"></div><div class="hoja" style="left:428px;top:648px;--c:var(--hoja1);--a:80deg;"></div><div class="hoja" style="left:1088px;top:685px;--c:var(--hoja2);--a:131deg;"></div><div class="hoja" style="left:421px;top:637px;--c:var(--hoja3);--a:178deg;"></div><div class="hoja" style="left:954px;top:663px;--c:var(--hoja2);--a:27deg;"></div><div class="hoja" style="left:330px;top:636px;--c:var(--hoja3);--a:78deg;"></div><div class="hoja" style="left:1143px;top:630px;--c:var(--hoja2);--a:171deg;"></div><div class="hoja" style="left:851px;top:682px;--c:var(--hoja2);--a:83deg;"></div><div class="hoja" style="left:362px;top:626px;--c:var(--hoja1);--a:92deg;"></div><div class="hoja" style="left:214px;top:287px;--c:var(--hoja2);--a:19deg;"></div><div class="hoja" style="left:319px;top:210px;--c:var(--hoja2);--a:163deg;"></div><div class="hoja" style="left:419px;top:275px;--c:var(--hoja3);--a:158deg;"></div><div class="hoja" style="left:323px;top:224px;--c:var(--hoja4);--a:53deg;"></div><div class="hoja" style="left:291px;top:319px;--c:var(--hoja3);--a:114deg;"></div><div class="hoja" style="left:355px;top:295px;--c:var(--hoja3);--a:130deg;"></div><div class="hoja" style="left:384px;top:276px;--c:var(--hoja1);--a:96deg;"></div><div class="hoja" style="left:343px;top:347px;--c:var(--hoja3);--a:22deg;"></div><div class="hoja" style="left:270px;top:350px;--c:var(--hoja1);--a:60deg;"></div><div class="hoja" style="left:187px;top:235px;--c:var(--hoja3);--a:34deg;"></div><div class="hoja" style="left:319px;top:248px;--c:var(--hoja4);--a:97deg;"></div><div class="hoja" style="left:245px;top:294px;--c:var(--hoja4);--a:77deg;"></div><div class="hoja" style="left:334px;top:349px;--c:var(--hoja4);--a:145deg;"></div>
+        <svg class="monton crece" viewBox="0 0 300 130" style="left:430px;width:300px;height:130px;--d:.8s;--f:5s"><use href="#monton"/></svg>
+        <div class="erizo-andar andar" style="position:absolute;left:0;top:0;--desde:560px;--d:.6s;--f:4.5s;z-index:6">
+          <svg class="erizo mira-izq" style="left:720px;top:503px;bottom:auto"><use href="#erizo"/></svg>
+          <div class="hoja" style="left:700px;top:600px;--c:var(--hoja1);--a:40deg;"></div><div class="hoja" style="left:690px;top:585px;--c:var(--hoja4);--a:105deg;"></div>
+        </div>
+        <div class="bubble" style="left:690px;top:330px;--d:5.2s;font-size:36px">¡Hago una camita<br>de hojas!</div>
+        <div class="narra" style="--d:1.2s;">Pincho, el erizo, junta hojas…</div>
+        <div class="de" style="left:760px;top:655px;--d:3.5s">erizo <i>Igel</i></div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-sky halftone" data-dur="9000" data-enter="wipe" data-name="El sol se va pronto">
+        
+        <svg class="sol sol-camino"><use href="#sol"/></svg>
+        <div class="capa funde" style="background:#f4a261;--o:.45;--d:4.5s;--f:2s"></div>
+        <div class="capa funde" style="background:#1d3557;--o:.9;--d:6s;--f:2.2s"></div>
+        <div class="estrella funde" style="left:200px;top:190px;--d:7.2s;--f:1.5s">✦</div><div class="estrella funde" style="left:420px;top:150px;--d:7.6s;--f:1.5s">✦</div><div class="estrella funde" style="left:640px;top:210px;--d:7.4s;--f:1.5s">✦</div><div class="estrella funde" style="left:820px;top:140px;--d:7.9s;--f:1.5s">✦</div><div class="estrella funde" style="left:1060px;top:200px;--d:7.5s;--f:1.5s">✦</div><div class="estrella funde" style="left:1180px;top:120px;--d:8.0s;--f:1.5s">✦</div>
+        <svg class="casa"><use href="#casa"/></svg><svg class="casa funde" style="opacity:0;--d:6.6s;--f:2s"><use href="#casa-luz"/></svg><svg class="arbol"><use href="#arbol"/></svg><div class="suelo "></div><div class="hoja" style="left:966px;top:684px;--c:var(--hoja3);--a:174deg;"></div><div class="hoja" style="left:965px;top:690px;--c:var(--hoja4);--a:5deg;"></div><div class="hoja" style="left:428px;top:648px;--c:var(--hoja1);--a:80deg;"></div><div class="hoja" style="left:1088px;top:685px;--c:var(--hoja2);--a:131deg;"></div><div class="hoja" style="left:421px;top:637px;--c:var(--hoja3);--a:178deg;"></div><div class="hoja" style="left:954px;top:663px;--c:var(--hoja2);--a:27deg;"></div><div class="hoja" style="left:330px;top:636px;--c:var(--hoja3);--a:78deg;"></div><div class="hoja" style="left:1143px;top:630px;--c:var(--hoja2);--a:171deg;"></div><div class="hoja" style="left:851px;top:682px;--c:var(--hoja2);--a:83deg;"></div><div class="hoja" style="left:362px;top:626px;--c:var(--hoja1);--a:92deg;"></div>
+        <div class="hoja" style="left:214px;top:287px;--c:var(--hoja2);--a:19deg;"></div><div class="hoja" style="left:220px;top:237px;--c:var(--hoja2);--a:91deg;"></div><div class="hoja" style="left:323px;top:224px;--c:var(--hoja4);--a:53deg;"></div><div class="hoja" style="left:331px;top:210px;--c:var(--hoja2);--a:67deg;"></div><div class="hoja" style="left:384px;top:276px;--c:var(--hoja1);--a:96deg;"></div><div class="hoja" style="left:257px;top:328px;--c:var(--hoja2);--a:83deg;"></div><div class="hoja" style="left:187px;top:235px;--c:var(--hoja3);--a:34deg;"></div><div class="hoja" style="left:287px;top:262px;--c:var(--hoja2);--a:95deg;"></div><div class="hoja" style="left:334px;top:349px;--c:var(--hoja4);--a:145deg;"></div>
+        <div class="narra" style="--d:1.0s;">Cada día el sol se va a dormir más pronto…<br>y calienta poquito.</div>
+        <div class="de" style="left:560px;top:460px;--d:3.2s">sol <i>Sonne</i></div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-sky halftone" data-dur="10000" data-enter="iris" data-name="Llega el invierno">
+        
+        <div class="capa funde" style="background:var(--cielo-invierno);--d:5s;--f:4s"></div>
+        <div class="capa funde" style="background:#8d99ae;--o:.35;--d:5s;--f:4s"></div>
+        <svg class="casa"><use href="#casa"/></svg><svg class="arbol"><use href="#arbol"/></svg><div class="suelo "></div>
+        <div class="suelo frio funde" style="opacity:0;--d:6s;--f:3.5s"></div>
+        <svg class="nina" style="left:560px"><use href="#talulla"/></svg>
+        <div class="hoja cae" style="left:220px;top:237px;--c:var(--hoja2);--a:91deg;--d:0.9s;--f:3.5s;--x:-40px;--y:375px;--ex:0px;"></div><div class="hoja cae" style="left:291px;top:319px;--c:var(--hoja3);--a:114deg;--d:1.8s;--f:3.5s;--x:40px;--y:293px;--ex:0px;"></div><div class="hoja cae" style="left:257px;top:328px;--c:var(--hoja2);--a:83deg;--d:2.7s;--f:3.5s;--x:40px;--y:284px;--ex:0px;"></div><div class="hoja cae" style="left:287px;top:262px;--c:var(--hoja2);--a:95deg;--d:3.6s;--f:3.5s;--x:-40px;--y:350px;--ex:0px;"></div><div class="hoja cae" style="left:331px;top:226px;--c:var(--hoja2);--a:115deg;--d:5.0s;--f:4.5s;--x:30px;--y:386px;--ex:0px;"></div><div class="viento" style="top:220px;--d:0.8s"></div><div class="viento" style="top:330px;--d:1.4s"></div><div class="viento" style="top:260px;--d:2.6s"></div><div class="viento" style="top:400px;--d:3.2s"></div>
+        <div class="narra" style="--d:4.6s;">La última hoja se cae…<br>¡ya llega el invierno!</div>
+        <div class="de" style="left:930px;top:210px;--d:8s">invierno <i>Winter</i></div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-invierno halftone" data-dur="10000" data-enter="page" data-name="¡Qué frío! A abrigarse">
+        
+        <svg class="casa"><use href="#casa"/></svg><svg class="arbol"><use href="#arbol"/></svg><div class="suelo frio"></div>
+        <svg class="nina grande tiembla" viewBox="0 0 120 200" style="left:550px;--d:.6s"><use href="#talulla"/><g class="ponte" style="--d:4.0s"><path d="M27 50 Q27 14 60 14 Q93 14 93 50 Z" fill="#ffd60a" stroke="#111" stroke-width="5" stroke-linejoin="round"/><rect x="24" y="42" width="72" height="13" rx="6" fill="#fff" stroke="#111" stroke-width="4"/><circle cx="60" cy="11" r="10" fill="#fff" stroke="#111" stroke-width="4"/></g><g class="ponte" style="--d:5.2s"><rect x="34" y="80" width="52" height="15" rx="7" fill="#3a86ff" stroke="#111" stroke-width="4"/><rect x="64" y="86" width="13" height="34" rx="4" fill="#3a86ff" stroke="#111" stroke-width="4"/></g><g class="ponte" style="--d:6.4s"><circle cx="27" cy="138" r="9" fill="#2a9d8f" stroke="#111" stroke-width="4"/><circle cx="93" cy="138" r="9" fill="#2a9d8f" stroke="#111" stroke-width="4"/></g><g class="ponte" style="--d:7.6s"><rect x="40" y="168" width="20" height="28" rx="5" fill="#ffd60a" stroke="#111" stroke-width="4"/><rect x="60" y="168" width="20" height="28" rx="5" fill="#ffd60a" stroke="#111" stroke-width="4"/></g></svg>
+        <div class="vaho" style="left:680px;top:405px;--d:0.6s"></div><div class="vaho" style="left:680px;top:405px;--d:1.4s"></div><div class="vaho" style="left:680px;top:405px;--d:2.2s"></div>
+        <div class="bubble" style="left:760px;top:170px;--d:1s;font-size:42px">¡Brrr! ¡Qué frío!</div>
+        <div class="narra" style="--d:3.6s;">Gorro… bufanda… guantes… botas.</div>
+        <div class="de" style="left:300px;top:285px;--d:4.0s">gorro <i>Mütze</i></div>
+        <div class="de" style="left:290px;top:420px;--d:5.2s">bufanda <i>Schal</i></div>
+        <div class="de" style="left:820px;top:500px;--d:6.4s">guantes <i>Handschuhe</i></div>
+        <div class="de" style="left:330px;top:590px;--d:7.6s">botas <i>Stiefel</i></div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-invierno halftone" data-dur="9000" data-enter="wipe" data-name="Pincho duerme">
+        
+        <svg class="arbol"><use href="#arbol"/></svg><div class="suelo frio"></div>
+        <svg class="monton" viewBox="0 0 300 130" style="left:360px;width:420px;height:182px"><use href="#monton"/></svg>
+        <svg class="erizo mira-izq funde" style="left:470px;bottom:96px;width:150px;height:101px;opacity:0;--d:3.6s;--f:2s"><use href="#erizo-duerme"/></svg>
+        <div style="position:absolute;inset:0;z-index:6">
+          <svg class="erizo mira-izq entra-monton" style="left:790px;--d:1.2s"><use href="#erizo"/></svg>
+        </div>
+        <div class="zzz" style="left:570px;top:470px;--d:4.6s">Z</div><div class="zzz" style="left:590px;top:465px;--d:5.8s">Z</div><div class="zzz" style="left:575px;top:470px;--d:7.0s">Z</div>
+        <svg class="nina" style="left:1010px"><use href="#talulla-abrigada"/></svg>
+        <div class="narra" style="--d:1.0s;">Pincho duerme todo el invierno, calentito.</div>
+        <div class="bubble right" style="left:720px;top:250px;--d:6s">¡Buenas noches, Pincho!</div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-invierno halftone" data-dur="10000" data-enter="iris" data-name="La nieve">
+        
+        <div class="nube-gris" style="left:80px;top:150px;--d:0s"></div><div class="nube-gris" style="left:480px;top:120px;--d:0.5s"></div><div class="nube-gris" style="left:880px;top:160px;--d:1.0s"></div>
+        <svg class="casa"><use href="#casa"/></svg><svg class="casa" style=""><use href="#casa-luz"/></svg><svg class="casa funde" style="opacity:0;--d:4.5s;--f:4s"><use href="#casa-nieve"/></svg><svg class="arbol"><use href="#arbol"/></svg><svg class="arbol funde" style="opacity:0;--d:4.5s;--f:4s"><use href="#arbol-nieve"/></svg><div class="suelo frio"></div>
+        <div class="suelo nieve funde" style="opacity:0;--d:3.5s;--f:5s"></div>
+        <svg class="nina" style="left:580px"><use href="#talulla-abrigada"/></svg>
+        <div class="copo" style="left:533px;--s:24px;--f:12.2s;--d:5.7s;--x:-40px"></div><div class="copo" style="left:963px;--s:20px;--f:11.6s;--d:5.6s;--x:-40px"></div><div class="copo" style="left:771px;--s:28px;--f:12.5s;--d:3.2s;--x:-40px"></div><div class="copo" style="left:1185px;--s:20px;--f:9.1s;--d:2.5s;--x:25px"></div><div class="copo" style="left:382px;--s:28px;--f:9.6s;--d:5.1s;--x:-25px"></div><div class="copo" style="left:921px;--s:20px;--f:9.5s;--d:5.9s;--x:-40px"></div><div class="copo" style="left:438px;--s:20px;--f:12.8s;--d:2.2s;--x:-25px"></div><div class="copo" style="left:602px;--s:24px;--f:12.8s;--d:3.9s;--x:-25px"></div><div class="copo" style="left:382px;--s:20px;--f:12.9s;--d:5.5s;--x:25px"></div><div class="copo" style="left:54px;--s:24px;--f:10.7s;--d:5.7s;--x:25px"></div><div class="copo" style="left:143px;--s:24px;--f:10.2s;--d:4.2s;--x:-40px"></div><div class="copo" style="left:1230px;--s:24px;--f:9.3s;--d:3.1s;--x:25px"></div><div class="copo" style="left:994px;--s:24px;--f:9.7s;--d:3.6s;--x:-25px"></div><div class="copo" style="left:126px;--s:24px;--f:12.9s;--d:1.6s;--x:25px"></div><div class="copo" style="left:837px;--s:16px;--f:11.2s;--d:3.4s;--x:40px"></div><div class="copo" style="left:1194px;--s:16px;--f:10.8s;--d:4.7s;--x:-25px"></div><div class="copo" style="left:253px;--s:20px;--f:12.7s;--d:5.7s;--x:25px"></div><div class="copo" style="left:1059px;--s:24px;--f:12.6s;--d:2.6s;--x:40px"></div><div class="copo" style="left:231px;--s:24px;--f:12.4s;--d:1.7s;--x:-40px"></div><div class="copo" style="left:436px;--s:24px;--f:11.1s;--d:3.1s;--x:-25px"></div><div class="copo" style="left:706px;--s:24px;--f:12.7s;--d:4.0s;--x:25px"></div><div class="copo" style="left:658px;--s:24px;--f:9.7s;--d:1.9s;--x:-25px"></div><div class="copo" style="left:643px;--s:28px;--f:9.6s;--d:1.7s;--x:40px"></div><div class="copo" style="left:75px;--s:20px;--f:12.0s;--d:3.0s;--x:25px"></div><div class="copo" style="left:943px;--s:28px;--f:9.6s;--d:5.9s;--x:-40px"></div><div class="copo" style="left:1020px;--s:24px;--f:12.4s;--d:2.1s;--x:-25px"></div><div class="copo" style="left:857px;--s:16px;--f:9.7s;--d:3.2s;--x:-40px"></div><div class="copo" style="left:871px;--s:24px;--f:9.6s;--d:5.6s;--x:-25px"></div><div class="copo" style="left:1079px;--s:28px;--f:12.8s;--d:4.6s;--x:25px"></div><div class="copo" style="left:991px;--s:24px;--f:10.2s;--d:3.3s;--x:-25px"></div><div class="copo" style="left:240px;--s:28px;--f:12.3s;--d:3.9s;--x:-25px"></div><div class="copo" style="left:1032px;--s:24px;--f:9.7s;--d:3.7s;--x:25px"></div><div class="copo" style="left:139px;--s:24px;--f:11.8s;--d:4.5s;--x:25px"></div><div class="copo" style="left:754px;--s:24px;--f:12.3s;--d:2.7s;--x:25px"></div><div class="copo" style="left:706px;--s:20px;--f:11.3s;--d:1.6s;--x:25px"></div><div class="copo" style="left:677px;--s:24px;--f:10.9s;--d:5.2s;--x:25px"></div><div class="copo" style="left:722px;--s:24px;--f:11.6s;--d:4.8s;--x:40px"></div><div class="copo" style="left:726px;--s:20px;--f:12.5s;--d:4.6s;--x:25px"></div><div class="copo" style="left:694px;--s:20px;--f:11.1s;--d:2.2s;--x:25px"></div><div class="copo" style="left:987px;--s:24px;--f:11.8s;--d:4.7s;--x:40px"></div>
+        <div class="narra" style="--d:2.2s;">Cuando hace mucho frío,<br>la lluvia se vuelve nieve.</div>
+        <div class="de" style="left:560px;top:450px;--d:5.5s">nieve <i>Schnee</i></div>
+        <div class="frame"></div>
+      </section>
+
+      <section class="scene bg-invierno halftone" data-dur="9000" data-enter="page" data-name="Muñeco de nieve">
+        
+        <svg class="casa"><use href="#casa"/></svg><svg class="casa" style=""><use href="#casa-luz"/></svg><svg class="casa" style=""><use href="#casa-nieve"/></svg><svg class="arbol"><use href="#arbol"/></svg><svg class="arbol" style=""><use href="#arbol-nieve"/></svg><div class="suelo nieve"></div>
+        <svg viewBox="0 -40 200 340" style="position:absolute;left:680px;bottom:90px;width:240px;height:408px;z-index:5;overflow:visible"><g class="aparece" style="--d:1.2s"><circle cx="100" cy="230" r="66" fill="#fff" stroke="#111" stroke-width="6"/></g><g class="aparece" style="--d:2.2s"><circle cx="100" cy="128" r="48" fill="#fff" stroke="#111" stroke-width="6"/><circle cx="100" cy="115" r="5" fill="#111"/><circle cx="100" cy="138" r="5" fill="#111"/></g><g class="aparece" style="--d:3.2s"><circle cx="100" cy="52" r="36" fill="#fff" stroke="#111" stroke-width="6"/></g><g class="aparece" style="--d:4.2s;transform-origin:50% 50%"><circle cx="88" cy="46" r="5" fill="#111"/><circle cx="112" cy="46" r="5" fill="#111"/><polygon points="98,56 104,56 140,66" fill="#f77f00" stroke="#111" stroke-width="3" stroke-linejoin="round"/><path d="M86 70 Q100 78 114 70" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/></g><g class="aparece" style="--d:5.2s"><rect x="64" y="8" width="72" height="12" rx="4" fill="#333" stroke="#111" stroke-width="4"/><rect x="76" y="-28" width="48" height="40" rx="4" fill="#333" stroke="#111" stroke-width="4"/><rect x="76" y="0" width="48" height="8" fill="#e63946"/></g></svg>
+        <svg class="nina salta" style="left:440px;--d:6.2s"><use href="#talulla-abrigada"/></svg>
+        <div class="copo" style="left:958px;--s:24px;--f:10.1s;--d:-1.9s;--x:-40px"></div><div class="copo" style="left:702px;--s:28px;--f:12.6s;--d:-1.0s;--x:-40px"></div><div class="copo" style="left:786px;--s:20px;--f:11.8s;--d:-5.3s;--x:40px"></div><div class="copo" style="left:331px;--s:20px;--f:10.0s;--d:-1.1s;--x:-40px"></div><div class="copo" style="left:795px;--s:16px;--f:12.7s;--d:-2.6s;--x:-25px"></div><div class="copo" style="left:873px;--s:16px;--f:12.1s;--d:-11.0s;--x:40px"></div><div class="copo" style="left:585px;--s:24px;--f:12.2s;--d:-2.4s;--x:-40px"></div><div class="copo" style="left:852px;--s:16px;--f:12.6s;--d:-10.6s;--x:-25px"></div><div class="copo" style="left:58px;--s:20px;--f:10.7s;--d:-9.7s;--x:-40px"></div><div class="copo" style="left:1232px;--s:16px;--f:9.5s;--d:-5.5s;--x:-25px"></div><div class="copo" style="left:686px;--s:16px;--f:12.6s;--d:-1.7s;--x:-40px"></div><div class="copo" style="left:1035px;--s:16px;--f:11.3s;--d:-6.1s;--x:-25px"></div><div class="copo" style="left:870px;--s:16px;--f:10.6s;--d:-6.8s;--x:-40px"></div><div class="copo" style="left:1197px;--s:20px;--f:9.7s;--d:-5.9s;--x:-40px"></div><div class="copo" style="left:120px;--s:24px;--f:11.2s;--d:-6.8s;--x:-25px"></div><div class="copo" style="left:559px;--s:16px;--f:9.5s;--d:-6.7s;--x:-25px"></div><div class="copo" style="left:341px;--s:16px;--f:11.9s;--d:-10.1s;--x:-40px"></div><div class="copo" style="left:721px;--s:16px;--f:12.5s;--d:-7.3s;--x:40px"></div><div class="copo" style="left:440px;--s:28px;--f:9.8s;--d:-9.3s;--x:-40px"></div><div class="copo" style="left:786px;--s:24px;--f:9.0s;--d:-1.0s;--x:-25px"></div><div class="copo" style="left:919px;--s:24px;--f:10.3s;--d:-0.9s;--x:25px"></div><div class="copo" style="left:221px;--s:16px;--f:9.1s;--d:-7.1s;--x:40px"></div><div class="copo" style="left:1028px;--s:24px;--f:11.8s;--d:-2.9s;--x:-40px"></div><div class="copo" style="left:880px;--s:20px;--f:9.4s;--d:-7.1s;--x:25px"></div><div class="copo" style="left:1157px;--s:24px;--f:9.6s;--d:-2.8s;--x:25px"></div><div class="copo" style="left:70px;--s:16px;--f:12.8s;--d:-10.3s;--x:25px"></div>
+        <div class="bubble right" style="left:170px;top:200px;--d:6.5s;font-size:44px">¡Hola, invierno!</div>
+        <div class="de" style="left:680px;top:640px;--d:5.8s">muñeco de nieve <i>Schneemann</i></div>
+        <div class="frame"></div>
+      </section>
+
+    </div>
+
+    <!-- Pantallas superpuestas: inicio y final -->
+    <div class="overlay" id="startOverlay">
+      <h2>Del otoño al invierno</h2>
+      <button class="big" id="startBtn">▶ Reproducir</button>
+    </div>
+    <div class="overlay" id="endOverlay" hidden>
+      <h2>¡Hola, invierno!</h2>
+      <button class="big" id="againBtn">↺ ¡Otra vez!</button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <a href="../" title="Volver a la galería">⬅</a>
+    <button id="playBtn" title="Reproducir / pausar (barra espaciadora)">▶</button>
+    <button id="restartBtn" title="Reiniciar">↺</button>
+    <div class="progress" id="progress"></div>
+    <span class="time" id="time">0.0 / 0.0 s</span>
+    <button id="fsBtn" title="Pantalla completa">⛶</button>
+  </div>
+</div>
+
+<script>
+  // ==========================================================
+  //  1) ESCALADO: el escenario mide 1280x720 y se ajusta a la ventana
+  // ==========================================================
+  const viewport = document.getElementById('viewport');
+  const stage = document.getElementById('stage');
+  new ResizeObserver(() => {
+    const s = Math.min(viewport.clientWidth / 1280, viewport.clientHeight / 720);
+    stage.style.setProperty('--s', s);
+  }).observe(viewport);
+
+  // ==========================================================
+  //  2) LÍNEA DE TIEMPO: calcula cuándo empieza cada escena
+  // ==========================================================
+  const scenes = [...stage.querySelectorAll('.scene')];
+  const starts = [];
+  let total = 0;
+  for (const s of scenes) { starts.push(total); total += Number(s.dataset.dur); }
+
+  // Barra de progreso: un segmento por escena (ancho proporcional a su duración)
+  const progress = document.getElementById('progress');
+  const fills = scenes.map((s, i) => {
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.style.flex = s.dataset.dur;
+    seg.title = `Escena ${i + 1}: ${s.dataset.name}`;
+    seg.innerHTML = '<b></b>';
+    seg.addEventListener('click', () => jumpTo(i));
+    progress.appendChild(seg);
+    return seg.firstChild;
+  });
+
+  let t = 0;            // tiempo actual (ms)
+  let current = -1;     // escena visible
+  let playing = false;
+  let last = 0;
+
+  // Muestra la escena i con su transición de entrada.
+  function showScene(i) {
+    const prev = scenes[current];
+    const next = scenes[i];
+    current = i;
+    next.classList.add('on');
+    if (!prev) return;
+    if (next.dataset.enter === 'none') { prev.classList.remove('on'); return; }
+    // Cuando termina la transición de entrada, se oculta la escena anterior
+    const done = e => {
+      if (e.target !== next) return;
+      next.removeEventListener('animationend', done);
+      prev.classList.remove('on');
+    };
+    next.addEventListener('animationend', done);
+  }
+
+  function update() {
+    let i = starts.findIndex((st, k) => t < st + Number(scenes[k].dataset.dur));
+    if (i === -1) i = scenes.length - 1;
+    if (i !== current) showScene(i);
+    fills.forEach((f, k) => {
+      const d = Number(scenes[k].dataset.dur);
+      f.style.width = Math.max(0, Math.min(1, (t - starts[k]) / d)) * 100 + '%';
+    });
+    document.getElementById('time').textContent =
+      `${(t / 1000).toFixed(1)} / ${(total / 1000).toFixed(1)} s`;
+  }
+
+  function tick(now) {
+    if (!playing) return;
+    t += Math.min(now - last, 100);   // evita saltos si la pestaña estuvo oculta
+    last = now;
+    if (t >= total) { t = total; update(); finish(); return; }
+    update();
+    requestAnimationFrame(tick);
+  }
+
+  function play() {
+    if (t >= total) return restart();
+    playing = true;
+    stage.classList.remove('paused');
+    document.getElementById('playBtn').textContent = '❚❚';
+    startOverlay.hidden = true; endOverlay.hidden = true;
+    last = performance.now();
+    requestAnimationFrame(tick);
+  }
+  function pause() {
+    playing = false;
+    stage.classList.add('paused');
+    document.getElementById('playBtn').textContent = '▶';
+  }
+  function finish() { pause(); endOverlay.hidden = false; }
+
+  // Reinicia todas las animaciones y salta al inicio de la escena i
+  function jumpTo(i) {
+    scenes.forEach(s => s.classList.remove('on'));
+    void stage.offsetWidth;          // fuerza al navegador a "olvidar" las animaciones
+    current = -1;
+    t = starts[i];
+    update();
+    play();
+  }
+  function restart() { jumpTo(0); }
+
+  // ==========================================================
+  //  3) CONTROLES
+  // ==========================================================
+  const startOverlay = document.getElementById('startOverlay');
+  const endOverlay = document.getElementById('endOverlay');
+  document.getElementById('startBtn').onclick = restart;
+  document.getElementById('againBtn').onclick = restart;
+  document.getElementById('restartBtn').onclick = restart;
+  document.getElementById('playBtn').onclick = () => {
+    if (current === -1) return restart();
+    playing ? pause() : play();
+  };
+  document.getElementById('fsBtn').onclick = () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else viewport.requestFullscreen?.();
+  };
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); document.getElementById('playBtn').click(); }
+  });
+
+  // Muestra el primer cuadro detrás de la pantalla de inicio
+  stage.classList.add('paused');
+  update();
+</script>
+</body>
+</html>
