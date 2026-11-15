@@ -10,7 +10,7 @@
   siguiente es MANUAL. Al terminar cada escena aparece el botón «Siguiente ▶» (o se pulsa → / Intro /
   barra espaciadora). Así el adulto puede parar, hablar con la niña y seguir cuando ella quiera.
 
-  El nombre del perro se cambia en la constante NOMBRE del <script> o con la URL: …/jardin/?nombre=Coco
+  El nombre del perro se cambia en la constante NOMBRE del <script> o con la URL: …/jardin/?nombre=Anton
   Todo es LENTO y SUAVE: sin destellos, sin temblores, sin onomatopeyas.
 -->
 <link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
@@ -327,13 +327,15 @@
 <!-- Personajes y decorados en SVG: se dibujan una vez y se reutilizan con <use> -->
 <svg width="0" height="0" style="position:absolute">
   <defs>
-    <!-- El boxer blanco, de pie, mirando a la derecha -->
+    <!-- Anton, el boxer blanco, de pie, mirando a la derecha.
+         Se le ve el lado derecho: ojo derecho AZUL y la mancha negra redonda de la espalda -->
     <symbol id="perro" viewBox="0 0 240 170">
       <path d="M56 74 Q40 60 38 42" fill="none" stroke="#111" stroke-width="17" stroke-linecap="round"/>
       <path d="M56 74 Q40 60 38 42" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
       <rect x="64" y="96" width="20" height="64" rx="9" fill="#ddd6cc" stroke="#111" stroke-width="5"/>
       <rect x="150" y="96" width="20" height="64" rx="9" fill="#ddd6cc" stroke="#111" stroke-width="5"/>
       <path d="M50 84 Q50 58 82 60 L156 56 Q190 56 192 84 Q194 116 162 118 Q128 108 96 116 Q52 118 50 84 Z" fill="#fff" stroke="#111" stroke-width="6" stroke-linejoin="round"/>
+      <circle cx="122" cy="74" r="12" fill="#111"/>
       <rect x="82" y="100" width="21" height="64" rx="9" fill="#fff" stroke="#111" stroke-width="5"/>
       <rect x="166" y="100" width="21" height="64" rx="9" fill="#fff" stroke="#111" stroke-width="5"/>
       <path d="M158 84 L170 34 L204 34 L198 88 Z" fill="#fff" stroke="#111" stroke-width="6" stroke-linejoin="round"/>
@@ -344,7 +346,7 @@
       <ellipse cx="231" cy="34" rx="7" ry="6" fill="#111"/>
       <path d="M214 56 Q224 62 234 54" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/>
       <path d="M176 16 Q168 -2 188 4 Q198 10 194 28 Q184 30 176 16 Z" fill="#f6c6c6" stroke="#111" stroke-width="5" stroke-linejoin="round"/>
-      <circle cx="203" cy="30" r="5" fill="#111"/><circle cx="204.5" cy="28.5" r="1.6" fill="#fff"/>
+      <circle cx="203" cy="30" r="6.5" fill="#4cc9f0" stroke="#111" stroke-width="2.5"/><circle cx="204" cy="30" r="2.8" fill="#111"/><circle cx="205.5" cy="28" r="1.4" fill="#fff"/>
       <circle cx="213" cy="47" r="5" fill="#f28482" opacity=".6"/>
     </symbol>
 
@@ -353,6 +355,7 @@
       <path d="M40 84 Q22 76 18 60" fill="none" stroke="#111" stroke-width="17" stroke-linecap="round"/>
       <path d="M40 84 Q22 76 18 60" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
       <ellipse cx="120" cy="88" rx="88" ry="34" fill="#fff" stroke="#111" stroke-width="6"/>
+      <circle cx="128" cy="70" r="12" fill="#111"/>
       <ellipse cx="72" cy="92" rx="34" ry="26" fill="#fff" stroke="#111" stroke-width="5"/>
       <rect x="64" y="106" width="52" height="18" rx="9" fill="#fff" stroke="#111" stroke-width="5"/>
       <rect x="164" y="100" width="84" height="18" rx="9" fill="#ddd6cc" stroke="#111" stroke-width="5"/>
@@ -365,7 +368,7 @@
       <circle cx="214" cy="82" r="5" fill="#f28482" opacity=".6"/>
     </symbol>
     <symbol id="tumbado" viewBox="0 0 260 130"><use href="#tumbado-base"/>
-      <circle cx="205" cy="66" r="5" fill="#111"/><circle cx="206.5" cy="64.5" r="1.6" fill="#fff"/></symbol>
+      <circle cx="205" cy="66" r="6.5" fill="#4cc9f0" stroke="#111" stroke-width="2.5"/><circle cx="206" cy="66" r="2.8" fill="#111"/><circle cx="207.5" cy="64" r="1.4" fill="#fff"/></symbol>
     <symbol id="tumbado-quieto" viewBox="0 0 260 130"><use href="#tumbado-base"/>
       <path d="M198 66 Q205 71 212 66" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/></symbol>
 
@@ -460,7 +463,7 @@
         <svg class="flor peque" style="left:1050px;color:#fff"><use href="#flor"/></svg>
         <svg class="flor peque" style="left:1140px;color:#f28482"><use href="#flor"/></svg>
         <div class="title-line" style="top:90px;font-size:130px;--d:.4s">El jardín</div>
-        <div class="title-line" style="top:230px;font-size:130px;--d:1.4s">de <span class="nombre">Coco</span></div>
+        <div class="title-line" style="top:230px;font-size:130px;--d:1.4s">de <span class="nombre">Anton</span></div>
         <svg class="huella" style="left:300px;top:640px;rotate:90deg;--d:1.6s"><use href="#huella"/></svg>
         <svg class="huella" style="left:360px;top:620px;rotate:90deg;--d:2.1s"><use href="#huella"/></svg>
         <svg class="huella" style="left:420px;top:640px;rotate:90deg;--d:2.6s"><use href="#huella"/></svg>
@@ -477,7 +480,7 @@
         <div class="suelo"></div>
         <div class="pelota rueda" style="left:880px;bottom:96px"></div>
         <svg class="perro corre" style="left:580px;--desde:-900px"><use href="#perro"/></svg>
-        <div class="narra" style="--d:.8s"><span class="nombre">Coco</span> era un boxer blanco.<br>¡Le encantaba correr!</div>
+        <div class="narra" style="--d:.8s"><span class="nombre">Anton</span> era un boxer blanco.<br>¡Le encantaba correr!</div>
         <div class="frame"></div>
       </section>
 
@@ -504,7 +507,7 @@
         <div class="cojin"></div>
         <svg class="perro andar se-va" style="left:660px;--d0:.6s;--f:4.4s;--pasos:6;--desde:-620px;--d:5.2s"><use href="#perro"/></svg>
         <svg class="tumbado llega" style="--d:5.2s"><use href="#tumbado"/></svg>
-        <div class="narra" style="--d:.8s">Con los años, <span class="nombre">Coco</span> se hizo viejito<br>y se cansaba mucho.</div>
+        <div class="narra" style="--d:.8s">Con los años, <span class="nombre">Anton</span> se hizo viejito<br>y se cansaba mucho.</div>
         <div class="frame"></div>
       </section>
 
@@ -517,7 +520,7 @@
         <svg class="tumbado"><use href="#tumbado-quieto"/></svg>
         <div class="hoja cae" style="left:1030px;top:320px;--d:2.4s;--f:5s"></div>
         <div class="capa funde" style="--d:.5s;--f:4s;--o:.28"></div>
-        <div class="narra" style="--d:1s">Un día, su cuerpo dejó de funcionar.<br><span class="nombre">Coco</span> se murió. Ya no le duele nada.</div>
+        <div class="narra" style="--d:1s">Un día, su cuerpo dejó de funcionar.<br><span class="nombre">Anton</span> se murió. Ya no le duele nada.</div>
         <div class="frame"></div>
       </section>
 
@@ -646,7 +649,7 @@
         <div class="corazon" style="left:500px;top:420px;--d:1s;--x:-30px">❤</div>
         <div class="corazon" style="left:760px;top:440px;--d:2s;--x:30px">❤</div>
         <div class="corazon" style="left:640px;top:330px;--d:2.8s">❤</div>
-        <div class="bubble" style="left:560px;top:150px;--d:1.4s">Te quiero, <span class="nombre">Coco</span>.</div>
+        <div class="bubble" style="left:560px;top:150px;--d:1.4s">Te quiero, <span class="nombre">Anton</span>.</div>
         <svg class="mariposa" style="left:300px;top:260px;color:#ffd60a;--f:5s;--x:200px;--d:.5s"><use href="#mariposa"/></svg>
         <div class="frame"></div>
       </section>
@@ -658,11 +661,11 @@
 
     <!-- Pantallas superpuestas: inicio y final -->
     <div class="overlay" id="startOverlay">
-      <h2>El jardín de <span class="nombre">Coco</span></h2>
+      <h2>El jardín de <span class="nombre">Anton</span></h2>
       <button class="big" id="startBtn">▶ Reproducir</button>
     </div>
     <div class="overlay" id="endOverlay" hidden>
-      <h2>Te queremos, <span class="nombre">Coco</span></h2>
+      <h2>Te queremos, <span class="nombre">Anton</span></h2>
       <button class="big" id="againBtn">↺ ¡Otra vez!</button>
     </div>
   </div>
@@ -681,7 +684,7 @@
   // ==========================================================
   //  0) NOMBRE DEL PERRO: cámbialo aquí o con ?nombre=… en la URL
   // ==========================================================
-  const NOMBRE = (new URLSearchParams(location.search).get('nombre') || 'Coco').trim().slice(0, 20) || 'Coco';
+  const NOMBRE = (new URLSearchParams(location.search).get('nombre') || 'Anton').trim().slice(0, 20) || 'Anton';
   document.querySelectorAll('.nombre').forEach(e => { e.textContent = NOMBRE; });
   document.title = 'El jardín de ' + NOMBRE;
 
