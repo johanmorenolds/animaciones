@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mini cómic animado</title>
+<!--
+  Demo de animación estilo cómic SIN dependencias:
+  - HTML  : estructura (viñetas, personajes SVG, globos de diálogo)
+  - CSS   : estilo cómic (tinta gruesa, trama de puntos "halftone", fuentes)
+            y animaciones con @keyframes
+  - JS    : una "línea de tiempo" que va activando escenas en orden
+  Abre este archivo directamente en el navegador.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111;
+    --paper: #fdf6e3;
+    --yellow: #ffd60a;
+    --red: #e63946;
+    --blue: #3a86ff;
+    --skin: #f4c095;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: #222;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Comic Neue', 'Comic Sans MS', cursive;
+    padding: 16px;
+  }
+
+  /* ---------- Página y viñetas ---------- */
+  .page {
+    width: min(900px, 100%);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 300px 300px;
+    gap: 14px;
+    background: var(--paper);
+    padding: 14px;
+    border: 4px solid var(--ink);
+  }
+  .panel {
+    position: relative; overflow: hidden;
+    border: 5px solid var(--ink);
+    background: var(--paper);
+    opacity: 0; transform: scale(.85) rotate(-2deg);
+    transition: opacity .4s, transform .5s cubic-bezier(.2,1.6,.4,1);
+  }
+  .panel.on { opacity: 1; transform: none; }
+  .panel.wide { grid-column: span 2; }
+
+  /* Trama de puntos (halftone) típica de cómic impreso */
+  .halftone::before {
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(0,0,0,.18) 1.6px, transparent 1.7px);
+    background-size: 9px 9px;
+    pointer-events: none; z-index: 0;
+  }
+  .bg-yellow { background-color: var(--yellow); }
+  .bg-blue   { background-color: #8ecae6; }
+
+  /* Líneas de acción radiales */
+  .speedlines {
+    position: absolute; inset: -50%;
+    background: repeating-conic-gradient(from 0deg at 50% 50%,
+      rgba(255,255,255,.9) 0deg 4deg, transparent 4deg 14deg);
+    animation: spin 6s linear infinite;
+    z-index: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Personajes ---------- */
+  .char { position: absolute; bottom: 0; z-index: 1; }
+  .hero  { left: 8%;  width: 150px; }
+  .robot { right: 8%; width: 150px; }
+
+  .panel.on .hero.walk { animation: walkIn 1.4s ease-out both, bob .35s ease-in-out 4 alternate; }
+  @keyframes walkIn { from { transform: translateX(-260px); } to { transform: none; } }
+  @keyframes bob { to { translate: 0 -8px; } }
+
+  .panel.on .robot.drop { animation: drop .7s cubic-bezier(.3,1.7,.5,1) .3s both; }
+  @keyframes drop { from { transform: translateY(-340px); } to { transform: none; } }
+
+  .panel.on .shake { animation: shake .12s linear 8; }
+  @keyframes shake {
+    25% { transform: translate(-6px, 3px) rotate(-1deg); }
+    75% { transform: translate(6px, -3px) rotate(1deg); }
+  }
+
+  .panel.on .punch { animation: punch .5s cubic-bezier(.5,-0.6,.4,1.6) .6s both; }
+  @keyframes punch { 0%{transform:none} 50%{transform:translateX(-30px)} 100%{transform:translateX(150px)} }
+
+  .panel.on .flyaway { animation: fly 1s ease-in 1s both; }
+  @keyframes fly { to { transform: translate(400px,-260px) rotate(540deg) scale(.3); opacity: 0; } }
+
+  /* ---------- Globos de diálogo ---------- */
+  .bubble {
+    position: absolute; z-index: 3;
+    background: #fff; border: 4px solid var(--ink); border-radius: 50% / 45%;
+    padding: 14px 20px; font-size: 18px; max-width: 220px; text-align: center;
+    transform: scale(0); transform-origin: bottom left;
+  }
+  .bubble::after { /* colita del globo */
+    content: ""; position: absolute; bottom: -22px; left: 28px;
+    border: 12px solid transparent; border-top: 18px solid var(--ink);
+  }
+  .bubble.right { transform-origin: bottom right; }
+  .bubble.right::after { left: auto; right: 28px; }
+  .panel.on .bubble { animation: pop .35s cubic-bezier(.3,1.8,.5,1) forwards; animation-delay: var(--d, 1s); }
+  @keyframes pop { to { transform: scale(1); } }
+
+  /* Texto escrito letra a letra (máquina de escribir) */
+  .type { display: inline-block; white-space: nowrap; overflow: hidden; width: 0; vertical-align: bottom; }
+  .panel.on .type { animation: typing var(--t, 1s) steps(var(--n, 20)) forwards; animation-delay: calc(var(--d, 1s) + .35s); }
+  @keyframes typing { to { width: calc(var(--n) * 1ch); } }
+
+  /* Caja de narrador */
+  .caption {
+    position: absolute; top: 10px; left: 10px; z-index: 3;
+    background: var(--yellow); border: 3px solid var(--ink);
+    padding: 6px 12px; font-size: 15px; text-transform: uppercase;
+    box-shadow: 4px 4px 0 var(--ink);
+  }
+
+  /* ---------- Onomatopeyas ---------- */
+  .sfx {
+    position: absolute; z-index: 4;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 3px;
+    color: var(--yellow);
+    -webkit-text-stroke: 3px var(--ink);
+    text-shadow: 6px 6px 0 var(--red), 9px 9px 0 var(--ink);
+    transform: scale(0) rotate(-30deg);
+  }
+  .panel.on .sfx { animation: boom .6s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+  @keyframes boom { to { transform: scale(1) rotate(var(--r, -12deg)); } }
+
+  /* Estallido detrás de la onomatopeya */
+  .burst {
+    position: absolute; z-index: 2; width: 260px; height: 260px;
+    background: #fff; border: 4px solid var(--ink);
+    clip-path: polygon(50% 0,61% 30%,95% 18%,72% 45%,100% 62%,66% 66%,75% 100%,50% 75%,22% 98%,32% 66%,0 70%,26% 48%,4% 20%,38% 32%);
+    transform: scale(0);
+  }
+  .panel.on .burst { animation: boom .5s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
+
+  /* ---------- Controles ---------- */
+  .controls { margin-top: 14px; }
+  button {
+    font-family: 'Bangers', Impact, sans-serif; font-size: 22px; letter-spacing: 2px;
+    background: var(--red); color: #fff; border: 4px solid var(--ink);
+    padding: 6px 22px; cursor: pointer; box-shadow: 4px 4px 0 #000;
+  }
+  button:active { transform: translate(3px,3px); box-shadow: 1px 1px 0 #000; }
+
+  @media (max-width: 640px) {
+    .page { grid-template-columns: 1fr; grid-template-rows: repeat(4, 260px); }
+    .panel.wide { grid-column: span 1; }
+    .hero, .robot { width: 110px; }
+    .bubble { font-size: 15px; max-width: 170px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Personajes reutilizables definidos una sola vez en SVG -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="hero" viewBox="0 0 120 200">
+      <!-- capa -->
+      <path d="M30 80 Q10 170 20 195 L100 195 Q110 170 90 80 Z" fill="#e63946" stroke="#111" stroke-width="5"/>
+      <!-- cuerpo -->
+      <rect x="35" y="78" width="50" height="80" rx="12" fill="#3a86ff" stroke="#111" stroke-width="5"/>
+      <path d="M48 100 L60 118 L72 100 Z" fill="#ffd60a" stroke="#111" stroke-width="4"/>
+      <!-- piernas -->
+      <rect x="38" y="152" width="18" height="44" fill="#1d3557" stroke="#111" stroke-width="5"/>
+      <rect x="64" y="152" width="18" height="44" fill="#1d3557" stroke="#111" stroke-width="5"/>
+      <!-- cabeza -->
+      <circle cx="60" cy="45" r="32" fill="#f4c095" stroke="#111" stroke-width="5"/>
+      <path d="M30 40 Q60 0 92 40 Q75 22 60 26 Q45 22 30 40Z" fill="#111"/>
+      <!-- antifaz y ojos -->
+      <rect x="34" y="38" width="52" height="14" rx="7" fill="#111"/>
+      <circle cx="49" cy="45" r="4" fill="#fff"/><circle cx="71" cy="45" r="4" fill="#fff"/>
+      <path d="M48 62 Q60 72 72 62" fill="none" stroke="#111" stroke-width="4" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="robot" viewBox="0 0 120 200">
+      <line x1="60" y1="8" x2="60" y2="28" stroke="#111" stroke-width="5"/>
+      <circle cx="60" cy="8" r="7" fill="#e63946" stroke="#111" stroke-width="4"/>
+      <rect x="25" y="28" width="70" height="55" rx="8" fill="#adb5bd" stroke="#111" stroke-width="5"/>
+      <circle cx="45" cy="52" r="9" fill="#ffd60a" stroke="#111" stroke-width="4"/>
+      <circle cx="75" cy="52" r="9" fill="#ffd60a" stroke="#111" stroke-width="4"/>
+      <rect x="42" y="68" width="36" height="8" fill="#111"/>
+      <rect x="20" y="88" width="80" height="70" rx="6" fill="#6c757d" stroke="#111" stroke-width="5"/>
+      <circle cx="60" cy="122" r="12" fill="#e63946" stroke="#111" stroke-width="4"/>
+      <rect x="30" y="156" width="22" height="40" fill="#495057" stroke="#111" stroke-width="5"/>
+      <rect x="68" y="156" width="22" height="40" fill="#495057" stroke="#111" stroke-width="5"/>
+    </symbol>
+  </defs>
+</svg>
+
+<main class="page">
+  <!-- Viñeta 1: el héroe llega -->
+  <section class="panel halftone bg-blue" data-dur="3200">
+    <div class="caption">Ciudad Tinta, 3:00 p.m.</div>
+    <svg class="char hero walk"><use href="#hero"/></svg>
+    <div class="bubble" style="top:60px;left:38%;--d:1.4s">
+      <span class="type" style="--n:18;--t:.9s">¡Qué día tan calmo!</span>
+    </div>
+  </section>
+
+  <!-- Viñeta 2: aparece el robot -->
+  <section class="panel halftone" data-dur="3200">
+    <div class="sfx" style="font-size:64px;top:20px;left:20px;--d:.9s;--r:-10deg">¡CRASH!</div>
+    <div class="shake" style="position:absolute;inset:0">
+      <svg class="char robot drop"><use href="#robot"/></svg>
+    </div>
+    <div class="bubble right" style="top:90px;left:10%;--d:1.8s">
+      <span class="type" style="--n:15;--t:.8s">BIP BOP. ¡RÍNDETE!</span>
+    </div>
+  </section>
+
+  <!-- Viñeta 3 (ancha): el golpe -->
+  <section class="panel wide halftone bg-yellow" data-dur="3600">
+    <div class="speedlines"></div>
+    <svg class="char hero punch" style="left:20%"><use href="#hero"/></svg>
+    <svg class="char robot flyaway" style="right:20%"><use href="#robot"/></svg>
+    <div class="burst" style="left:calc(50% - 130px);top:20px;--d:1s"></div>
+    <div class="sfx" style="font-size:96px;left:calc(50% - 100px);top:80px;--d:1.05s">¡POW!</div>
+    <div class="caption" style="left:auto;right:10px;top:auto;bottom:10px">Fin… ¿o no?</div>
+  </section>
+</main>
+
+<div class="controls"><button id="replay">¡Otra vez!</button></div>
+
+<script>
+  // Línea de tiempo muy simple: activa cada viñeta tras la duración de la anterior.
+  // Las animaciones internas las hace CSS; JS solo decide el orden y el ritmo.
+  const panels = [...document.querySelectorAll('.panel')];
+  let timers = [];
+
+  function play() {
+    timers.forEach(clearTimeout);
+    timers = [];
+    panels.forEach(p => p.classList.remove('on'));
+    void document.body.offsetWidth;            // fuerza reflow para reiniciar animaciones CSS
+
+    let t = 300;
+    for (const p of panels) {
+      timers.push(setTimeout(() => p.classList.add('on'), t));
+      t += Number(p.dataset.dur);
+    }
+  }
+
+  document.getElementById('replay').addEventListener('click', play);
+  play();
+</script>
+</body>
+</html>
