@@ -147,7 +147,12 @@
   .panel.on .burst { animation: boom .5s cubic-bezier(.2,2,.4,1) forwards; animation-delay: var(--d, .5s); }
 
   /* ---------- Controles ---------- */
-  .controls { margin-top: 14px; }
+  .controls { margin-top: 14px; display: flex; gap: 14px; align-items: center; }
+  .back {
+    font-family: 'Bangers', Impact, sans-serif; font-size: 22px; letter-spacing: 2px;
+    background: var(--yellow); color: var(--ink); border: 4px solid var(--ink);
+    padding: 6px 18px; box-shadow: 4px 4px 0 #000; text-decoration: none;
+  }
   button {
     font-family: 'Bangers', Impact, sans-serif; font-size: 22px; letter-spacing: 2px;
     background: var(--red); color: #fff; border: 4px solid var(--ink);
@@ -232,7 +237,10 @@
   </section>
 </main>
 
-<div class="controls"><button id="replay">¡Otra vez!</button></div>
+<div class="controls">
+  <a class="back" href="../">⬅ Volver</a>
+  <button id="replay">¡Otra vez!</button>
+</div>
 
 <script>
   // Línea de tiempo muy simple: activa cada viñeta tras la duración de la anterior.

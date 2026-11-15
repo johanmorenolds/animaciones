@@ -2,8 +2,156 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Animaciones</title>
-<meta http-equiv="refresh" content="0; url=comic-demo/">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Laboratorio de Animaciones</title>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #111;
+    --paper: #fdf6e3;
+    --yellow: #ffd60a;
+    --red: #e63946;
+    --blue: #3a86ff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: #222;
+    color: var(--ink);
+    font-family: 'Comic Neue', 'Comic Sans MS', cursive;
+    padding: 24px 16px 40px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+
+  /* ---------- Cabecera ---------- */
+  header {
+    position: relative; overflow: hidden;
+    background: var(--yellow);
+    border: 5px solid var(--ink);
+    box-shadow: 8px 8px 0 #000;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  header::before { /* trama de puntos */
+    content: ""; position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(0,0,0,.18) 1.6px, transparent 1.7px);
+    background-size: 9px 9px;
+  }
+  h1 {
+    position: relative; margin: 0;
+    font-family: 'Bangers', Impact, sans-serif; letter-spacing: 3px;
+    font-size: clamp(40px, 8vw, 72px);
+    color: #fff;
+    -webkit-text-stroke: 3px var(--ink);
+    text-shadow: 5px 5px 0 var(--red), 8px 8px 0 var(--ink);
+    animation: boom .7s cubic-bezier(.2,2,.4,1) both;
+  }
+  header p { position: relative; margin: 10px 0 0; font-size: 18px; }
+  @keyframes boom { from { transform: scale(0) rotate(-20deg); } to { transform: scale(1) rotate(-2deg); } }
+
+  /* ---------- Rejilla de animaciones ---------- */
+  .grid {
+    margin-top: 32px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+  }
+  .card {
+    display: flex; flex-direction: column;
+    background: var(--paper);
+    border: 5px solid var(--ink);
+    box-shadow: 6px 6px 0 #000;
+    text-decoration: none; color: inherit;
+    transition: transform .15s, box-shadow .15s;
+    animation: pop .45s cubic-bezier(.3,1.8,.5,1) both;
+    animation-delay: calc(var(--i) * .1s + .3s);
+  }
+  @keyframes pop { from { transform: scale(.6); opacity: 0; } }
+  .card:hover, .card:focus-visible {
+    transform: translate(-3px,-3px) rotate(-1deg);
+    box-shadow: 10px 10px 0 #000;
+    outline: none;
+  }
+  .thumb {
+    height: 150px; border-bottom: 5px solid var(--ink);
+    display: grid; place-items: center;
+    font-size: 64px;
+    background-image: radial-gradient(rgba(0,0,0,.15) 1.5px, transparent 1.6px);
+    background-size: 9px 9px;
+  }
+  .info { padding: 14px 16px 18px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .info h2 { margin: 0; font-family: 'Bangers', Impact, sans-serif; letter-spacing: 1.5px; font-size: 28px; font-weight: normal; }
+  .info p { margin: 0; font-size: 16px; flex: 1; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 13px; border: 2px solid var(--ink); padding: 1px 8px; background: #fff; }
+  .btn {
+    align-self: flex-start; margin-top: 6px;
+    font-family: 'Bangers', Impact, sans-serif; font-size: 20px; letter-spacing: 1.5px;
+    background: var(--red); color: #fff; border: 3px solid var(--ink);
+    padding: 4px 16px; box-shadow: 3px 3px 0 #000;
+  }
+
+  /* Tarjeta "próximamente" */
+  .card.soon { border-style: dashed; box-shadow: none; opacity: .75; cursor: default; }
+  .card.soon:hover { transform: none; box-shadow: none; }
+  .card.soon .btn { background: #888; }
+
+  footer { margin-top: 36px; text-align: center; color: #bbb; font-size: 14px; }
+</style>
 </head>
-<body><a href="comic-demo/">Ver el cómic animado</a></body>
+<body>
+<div class="wrap">
+  <header>
+    <h1>¡Laboratorio de Animaciones!</h1>
+    <p>Experimentos de animación tipo cómic con HTML, CSS, SVG y JavaScript</p>
+  </header>
+
+  <main class="grid" id="grid"></main>
+
+  <footer>Haz clic en una tarjeta para ver la animación.</footer>
+</div>
+
+<script>
+  // ============================================================
+  //  LISTA DE ANIMACIONES
+  //  Para añadir una nueva: crea su carpeta (ej. "mi-escena/index.html")
+  //  y agrega un objeto aquí. El índice se genera solo.
+  // ============================================================
+  const animaciones = [
+    {
+      titulo: 'Héroe vs. Robot',
+      descripcion: 'Tres viñetas: el héroe llega, cae un robot con un ¡CRASH! y lo despacha de un ¡POW!',
+      enlace: 'comic-demo/',
+      icono: '💥',
+      color: '#ffd60a',
+      tags: ['CSS keyframes', 'SVG', 'Globos de diálogo']
+    },
+    {
+      titulo: 'Próximamente…',
+      descripcion: 'Aquí aparecerá la siguiente animación que creemos.',
+      enlace: null,
+      icono: '✏️',
+      color: '#8ecae6',
+      tags: ['En el taller']
+    }
+  ];
+
+  const grid = document.getElementById('grid');
+  animaciones.forEach((a, i) => {
+    const card = document.createElement(a.enlace ? 'a' : 'div');
+    card.className = 'card' + (a.enlace ? '' : ' soon');
+    card.style.setProperty('--i', i);
+    if (a.enlace) card.href = a.enlace;
+    card.innerHTML = `
+      <div class="thumb" style="background-color:${a.color}">${a.icono}</div>
+      <div class="info">
+        <h2>${a.titulo}</h2>
+        <p>${a.descripcion}</p>
+        <div class="tags">${a.tags.map(t => `<span class="tag">${t}</span>`).join('')}</div>
+        <span class="btn">${a.enlace ? '¡Ver animación!' : 'Pronto'}</span>
+      </div>`;
+    grid.appendChild(card);
+  });
+</script>
+</body>
 </html>
